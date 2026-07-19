@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>獎金分潤試算 · LIFF</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    /* 輕鬆自然配色：奶油、苔綠、暖木、天青 */
+    --bg:#F5F1E8;
+    --card:#FBF8F1;
+    --card-soft:#F0EBDD;
+    --ink:#3E3A32;
+    --ink-soft:#7C766A;
+    --line:#E4DCCB;
+    --sage:#7C9070;      /* 主綠 */
+    --sage-deep:#5E7357;
+    --sage-tint:#E7EDDF;
+    --clay:#C98A5E;      /* 暖木 / a */
+    --clay-tint:#F3E3D3;
+    --sky:#7FA6AE;       /* 天青 / b */
+    --sky-tint:#DFEAEC;
+    --plum:#9A7FA6;      /* 藕紫 / c */
+    --plum-tint:#EBE2EF;
+    --warn:#C4713F;
+    --warn-bg:#F8E7D8;
+    --ok:#5E7357;
+    --shadow:0 1px 2px rgba(62,58,50,.05),0 6px 20px rgba(62,58,50,.06);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",Helvetica,sans-serif;
+    background:var(--bg);color:var(--ink);
+    line-height:1.55;font-size:15px;
+    padding:0 0 40px;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:0 16px}
+
+  /* Header */
+  header{
+    background:linear-gradient(135deg,#7C9070,#5E7357);
+    color:#fff;padding:22px 16px 18px;text-align:center;
+    border-radius:0 0 26px 26px;box-shadow:var(--shadow);
+    position:relative;
+  }
+  header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.5px}
+  header .sub{margin:4px 0 0;font-size:12.5px;opacity:.9}
+  .greet{
+    margin:10px auto 0;display:inline-flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.16);padding:5px 12px;border-radius:999px;
+    font-size:12.5px;
+  }
+  .greet img{width:22px;height:22px;border-radius:50%;object-fit:cover;background:#fff3}
+
+  .wrap{margin-top:16px}
+
+  /* Card */
+  .card{
+    background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:16px;margin-bottom:14px;border:1px solid var(--line);
+  }
+  .card h2{
+    margin:0 0 12px;font-size:14px;font-weight:700;color:var(--sage-deep);
+    display:flex;align-items:center;gap:8px;
+  }
+  .card h2 .dot{width:8px;height:8px;border-radius:50%;background:var(--sage);flex:none}
+
+  /* Inputs */
+  .field{margin-bottom:11px}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:600}
+  .field .hint{font-weight:400;color:#a89f8e;font-size:11.5px}
+  input[type=text],input[type=number]{
+    width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:11px;
+    background:#fff;font-size:15px;color:var(--ink);font-family:inherit;transition:border-color .15s;
+  }
+  input:focus{outline:none;border-color:var(--sage)}
+  .row{display:flex;gap:10px}
+  .row .field{flex:1}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .tag-a,.tag-b,.tag-c{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:700;margin-right:4px}
+  .tag-a{background:var(--clay-tint);color:var(--clay)}
+  .tag-b{background:var(--sky-tint);color:var(--sky)}
+  .tag-c{background:var(--plum-tint);color:var(--plum)}
+
+  /* Result rows */
+  .rline{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .rline:last-child{border-bottom:none}
+  .rline .k{color:var(--ink-soft)}
+  .rline .v{font-variant-numeric:tabular-nums;font-weight:600}
+  .rline.big{padding:10px 0}
+  .rline.big .k{color:var(--ink);font-weight:700;font-size:15px}
+  .rline.big .v{font-size:19px;color:var(--sage-deep);font-weight:800}
+  .pill{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--sage-tint);color:var(--sage-deep);font-weight:700}
+
+  /* Highlight block */
+  .hl{
+    background:linear-gradient(135deg,var(--sage-tint),#F1F5EC);
+    border-radius:14px;padding:14px;text-align:center;margin-top:4px;
+  }
+  .hl .cap{font-size:12px;color:var(--sage-deep);font-weight:600}
+  .hl .amt{font-size:30px;font-weight:800;color:var(--sage-deep);font-variant-numeric:tabular-nums;letter-spacing:.5px;margin-top:2px}
+
+  /* Split bar */
+  .bar{display:flex;height:24px;border-radius:8px;overflow:hidden;margin:12px 0 8px;background:var(--card-soft)}
+  .bar span{transition:width .3s ease;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#fff;font-weight:700}
+  .seg-a{background:var(--clay)}.seg-b{background:var(--sky)}.seg-c{background:var(--plum)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:2px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+
+  /* Method table */
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  th,td{padding:7px 5px;text-align:right;font-variant-numeric:tabular-nums}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--ink-soft);font-weight:600;border-bottom:1.5px solid var(--line);font-size:11.5px}
+  tbody tr{border-bottom:1px solid var(--card-soft)}
+  tbody tr.rec{background:var(--sage-tint);font-weight:700}
+  tbody tr.rec td{color:var(--sage-deep)}
+  .mname{font-weight:600}
+
+  /* Advice / warn */
+  .note{border-radius:12px;padding:12px 13px;font-size:13px;margin-top:4px;line-height:1.5}
+  .note.good{background:var(--sage-tint);color:var(--sage-deep)}
+  .note.warn{background:var(--warn-bg);color:var(--warn)}
+  .note b{font-weight:700}
+
+  /* Pay steps */
+  .step{display:flex;gap:11px;padding:9px 0;border-bottom:1px dashed var(--line);align-items:flex-start}
+  .step:last-child{border-bottom:none}
+  .step .num{flex:none;width:24px;height:24px;border-radius:50%;background:var(--sage);color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .step .body{flex:1}
+  .step .body .t{font-size:13.5px}
+  .step .body .d{font-size:11.5px;color:var(--ink-soft)}
+  .step .body .a{font-weight:700;font-variant-numeric:tabular-nums;color:var(--sage-deep)}
+
+  /* Buttons */
+  .actions{display:flex;gap:10px;margin-top:6px}
+  button.btn{
+    flex:1;padding:13px;border:none;border-radius:13px;font-size:14.5px;font-weight:700;
+    font-family:inherit;cursor:pointer;transition:transform .1s,opacity .15s;
+  }
+  button.btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--sage);color:#fff;box-shadow:0 4px 12px rgba(124,144,112,.35)}
+  .btn-ghost{background:var(--card-soft);color:var(--sage-deep)}
+  .btn:disabled{opacity:.5;cursor:default}
+
+  .foot{font-size:11px;color:#a89f8e;text-align:center;margin-top:14px;line-height:1.6;padding:0 6px}
+  .status{font-size:11.5px;text-align:center;color:var(--ink-soft);margin:2px 0 12px;min-height:16px}
+  details{margin-top:8px}
+  summary{font-size:12.5px;color:var(--ink-soft);cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>獎金分潤試算</h1>
+  <p class="sub">新制 · 落點式／責任額</p>
+  <div class="greet" id="greet" style="display:none">
+    <img id="avatar" alt=""><span id="uname">—</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="status" id="status"></div>
+
+  <!-- 角色設定 -->
+  <div class="card">
+    <h2><span class="dot"></span>角色設定</h2>
+    <div class="grid3">
+      <div class="field"><label><span class="tag-a">a</span>業績掛單者</label><input type="text" id="nameA" value="夙君"></div>
+      <div class="field"><label><span class="tag-b">b</span>代收轉付方</label><input type="text" id="nameB" value="經理"></div>
+      <div class="field"><label><span class="tag-c">c</span>外部轉介</label><input type="text" id="nameC" value="外部轉介"></div>
+    </div>
+    <div class="field" style="margin-top:11px"><label>月份 <span class="hint">（記錄用，如 202608）</span></label><input type="text" id="month" value="" inputmode="numeric"></div>
+  </div>
+
+  <!-- 個人參數 -->
+  <div class="card">
+    <h2><span class="dot"></span>個人參數（算責任額）</h2>
+    <div class="grid3">
+      <div class="field"><label>月薪</label><input type="number" id="salary" value="0" inputmode="numeric"></div>
+      <div class="field"><label>年薪月數</label><input type="number" id="months" value="14" inputmode="numeric"></div>
+      <div class="field"><label>責任額倍數</label><input type="number" id="mult" value="3" inputmode="decimal"></div>
+    </div>
+  </div>
+
+  <!-- 手收與參數 -->
+  <div class="card">
+    <h2><span class="dot"></span>本月手續費收入</h2>
+    <div class="field"><label><span class="tag-a">手收 a</span><span id="lblA">夙君</span> 自己客戶</label><input type="number" id="a" value="0" inputmode="numeric"></div>
+    <div class="field"><label><span class="tag-b">手收 b</span><span id="lblB">經理</span> 的客戶（掛 a 名下）</label><input type="number" id="b" value="0" inputmode="numeric"></div>
+    <div class="field"><label><span class="tag-c">手收 c</span><span id="lblC">外部轉介</span>（掛 a 名下）</label><input type="number" id="c" value="0" inputmode="numeric"></div>
+    <div class="grid3" style="margin-top:4px">
+      <div class="field"><label>稅率</label><input type="number" id="tax" value="0.2" inputmode="decimal" step="0.01"></div>
+      <div class="field"><label>獎勵折扣</label><input type="number" id="disc" value="0.1" inputmode="decimal" step="0.01"></div>
+      <div class="field"><label>前期遞延</label><input type="number" id="deferred" value="0" inputmode="numeric"></div>
+    </div>
+  </div>
+
+  <!-- 總獎金 -->
+  <div class="card">
+    <h2><span class="dot"></span>本月總獎金</h2>
+    <div class="rline"><span class="k">月平均薪資</span><span class="v" id="o_avg"></span></div>
+    <div class="rline"><span class="k">責任額 d</span><span class="v" id="o_d"></span></div>
+    <div class="rline"><span class="k">應扣總額（d＋前期遞延）</span><span class="v" id="o_duty"></span></div>
+    <div class="rline"><span class="k">總手收 a＋b＋c</span><span class="v" id="o_total"></span></div>
+    <div class="rline"><span class="k">淨收入 e</span><span class="v" id="o_e"></span></div>
+    <div class="rline"><span class="k">落點式比例</span><span class="v"><span class="pill" id="o_rate"></span></span></div>
+    <div class="rline"><span class="k">稅前獎金（折扣前）</span><span class="v" id="o_pre"></span></div>
+    <div class="rline"><span class="k">折扣後獎金（稅前）</span><span class="v" id="o_afterdisc"></span></div>
+    <div class="hl"><div class="cap">總獎金（稅後）· 公司實發給 a 方</div><div class="amt" id="o_aftertax"></div></div>
+  </div>
+
+  <!-- 三種拆分 -->
+  <div class="card">
+    <h2><span class="dot"></span>三種拆分方法（稅後）</h2>
+    <div class="bar" id="bar"></div>
+    <div class="legend">
+      <span><i style="background:var(--clay)"></i><span id="lg_a">夙君</span> a</span>
+      <span><i style="background:var(--sky)"></i><span id="lg_b">經理</span> b</span>
+      <span><i style="background:var(--plum)"></i><span id="lg_c">外部</span> c</span>
+    </div>
+    <table>
+      <thead><tr><th>方法</th><th id="h_a">a</th><th id="h_b">b</th><th id="h_c">c</th></tr></thead>
+      <tbody id="mbody"></tbody>
+    </table>
+    <details>
+      <summary>方法說明</summary>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6">
+        <b>① 按手收比例</b>：責任額與跳級好處按三方手收比例共享，最單純好解釋。<br>
+        <b>② Shapley 折衷</b>：合作綜效按 Shapley 值分配，理論最公平。<br>
+        <b>③ 責任額由 a 自扛</b>：b、c 扣掉分攤缺口後按實際落點全額計酬。
+      </div>
+    </details>
+  </div>
+
+  <!-- 建議 -->
+  <div class="card">
+    <h2><span class="dot"></span>建議</h2>
+    <div class="rline"><span class="k">當月有利方（手收最高）</span><span class="v" id="o_fav"></span></div>
+    <div class="rline"><span class="k">談判區間（a 撥給 b，含代轉 c）</span><span class="v" id="o_range1"></span></div>
+    <div class="rline"><span class="k">談判區間（b 淨留存）</span><span class="v" id="o_range2"></span></div>
+    <div class="note" id="advice"></div>
+  </div>
+
+  <!-- 撥付路徑 -->
+  <div class="card">
+    <h2><span class="dot"></span>建議撥付路徑</h2>
+    <div id="paysteps"></div>
+    <div class="rline big" style="margin-top:6px"><span class="k" id="lbl_net">b 淨留存</span><span class="v" id="o_net3"></span></div>
+    <div class="rline"><span class="k" id="lbl_akeep">a 自己留存</span><span class="v" id="o_akeep"></span></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="sendBtn">傳送結果到聊天室</button>
+    <button class="btn btn-ghost" id="closeBtn">關閉</button>
+  </div>
+
+  <p class="foot">
+    本表為私下分潤試算，與公司帳上獎金發放為兩回事。<br>
+    代收轉付涉及所得歸屬，稅務處理請洽會計師。
+  </p>
+</div>
+
+<script>
+/* ====== 計算邏輯（比照試算表「試算-」分頁） ====== */
+function bracket(e){
+  if(e<=0) return 0;
+  if(e<=200000) return 0.35;
+  if(e<=400000) return 0.40;
+  if(e<=600000) return 0.45;
+  return 0.50;
+}
+function compute(inp){
+  const {salary,months,mult,a,b,c,tax,disc,deferred}=inp;
+  const avg=salary*months/12;
+  const d=avg*mult;
+  const duty=d+deferred;
+  const total=a+b+c;
+  const e=total-duty;
+  const rate=bracket(e);
+  const pre=Math.max(0,e*rate);
+  const afterDisc=pre*(1-disc);
+  const afterTax=afterDisc*(1-tax);
+
+  const gap=Math.max(0,duty-a);
+  const bShare=(b+c)===0?0:gap*b/(b+c);
+  const cShare=(b+c)===0?0:gap*c/(b+c);
+  const bNet=Math.max(0,b-bShare);
+  const cNet=Math.max(0,c-cShare);
+
+  const v=(sa,sb,sc)=>{const s=(sa?a:0)+(sb?b:0)+(sc?c:0);const ee=s-duty;const r=bracket(ee);return Math.max(0,ee*r)*(1-disc)*(1-tax);};
+  const va=v(1,0,0),vb=v(0,1,0),vc=v(0,0,1),vab=v(1,1,0),vac=v(1,0,1),vbc=v(0,1,1),vabc=afterTax;
+
+  const m1=[total===0?0:afterTax*a/total, total===0?0:afterTax*b/total, total===0?0:afterTax*c/total];
+  const m2=[
+    1/3*va+1/6*(vab-vb)+1/6*(vac-vc)+1/3*(vabc-vbc),
+    1/3*vb+1/6*(vab-va)+1/6*(vbc-vc)+1/3*(vabc-vac),
+    1/3*vc+1/6*(vac-va)+1/6*(vbc-vb)+1/3*(vabc-vab)
+  ];
+  const m3c=cNet*rate*(1-disc)*(1-tax);
+  const m3b=bNet*rate*(1-disc)*(1-tax);
+  const m3a=Math.max(0,afterTax-m3b-m3c);
+  const m3=[m3a,m3b,m3c];
+
+  const use3=(a>=duty)&&(b>=a)&&(b>=c);
+  const rec=[use3?m3[0]:(m1[0]+m2[0])/2, use3?m3[1]:(m1[1]+m2[1])/2, use3?m3[2]:(m1[2]+m2[2])/2];
+  const pay1=rec[1]+rec[2];
+  const pay2=rec[2];
+  const net3=pay1-pay2;
+  const aKeep=afterTax-pay1;
+
+  let fav='c';
+  if(a>=b&&a>=c) fav='a'; else if(b>=a&&b>=c) fav='b';
+
+  let advice, warn=false;
+  if(a<duty){
+    warn=true;
+    advice=`a 未達應扣總額，缺口 ${fmt(gap)} 由 b＋c 按比例吸收。此時用 ③ 會讓 a 方趨近 0，建議採 <b>①／② 折衷</b>。`;
+  } else if(use3){
+    advice=`b 為有利方且 a 已覆蓋責任額，可主張較高分潤，建議採 <b>③ 責任額由 a 自扛</b>。`;
+  } else {
+    advice=`a 已覆蓋責任額，但有利方非 b，宜按手收比例或綜效分配，建議採 <b>①／② 折衷</b>。`;
+  }
+
+  return {avg,d,duty,total,e,rate,pre,afterDisc,afterTax,gap,bNet,cNet,
+    m1,m2,m3,use3,rec,pay1,pay2,net3,aKeep,fav,advice,warn,
+    range1:[Math.min(m1[1]+m1[2],m2[1]+m2[2],m3[1]+m3[2]),Math.max(m1[1]+m1[2],m2[1]+m2[2],m3[1]+m3[2])],
+    range2:[Math.min(m1[1],m2[1],m3[1]),Math.max(m1[1],m2[1],m3[1])]};
+}
+
+/* ====== 格式化 ====== */
+function fmt(n){if(!isFinite(n))n=0;return Math.round(n).toLocaleString('en-US');}
+function pct(n){return (n*100).toFixed(0)+'%';}
+const $=id=>document.getElementById(id);
+function num(id){const v=parseFloat($(id).value);return isNaN(v)?0:v;}
+
+/* ====== 渲染 ====== */
+let last=null;
+function render(){
+  const names={A:$('nameA').value||'a',B:$('nameB').value||'b',C:$('nameC').value||'c'};
+  ['lblA','lg_a','h_a'].forEach(x=>$(x).textContent=names.A);
+  ['lblB','lg_b','h_b'].forEach(x=>$(x).textContent=names.B);
+  ['lblC','lg_c','h_c'].forEach(x=>$(x).textContent=names.C);
+
+  const inp={salary:num('salary'),months:num('months'),mult:num('mult'),
+    a:num('a'),b:num('b'),c:num('c'),tax:num('tax'),disc:num('disc'),deferred:num('deferred')};
+  const r=compute(inp);
+  last={r,names,inp,month:$('month').value};
+
+  $('o_avg').textContent=fmt(r.avg);
+  $('o_d').textContent=fmt(r.d);
+  $('o_duty').textContent=fmt(r.duty);
+  $('o_total').textContent=fmt(r.total);
+  $('o_e').textContent=fmt(r.e);
+  $('o_rate').textContent=pct(r.rate);
+  $('o_pre').textContent=fmt(r.pre);
+  $('o_afterdisc').textContent=fmt(r.afterDisc);
+  $('o_aftertax').textContent=fmt(r.afterTax);
+
+  const tot=r.rec[0]+r.rec[1]+r.rec[2];
+  const bar=$('bar');bar.innerHTML='';
+  const segs=[['seg-a',r.rec[0]],['seg-b',r.rec[1]],['seg-c',r.rec[2]]];
+  segs.forEach(([cls,val])=>{
+    const w=tot>0?val/tot*100:0;
+    const s=document.createElement('span');s.className=cls;s.style.width=w+'%';
+    if(w>10)s.textContent=Math.round(w)+'%';bar.appendChild(s);
+  });
+
+  const mb=$('mbody');mb.innerHTML='';
+  const rows=[['① 手收比例',r.m1],['② Shapley',r.m2],['③ a 自扛',r.m3]];
+  const recIdx=r.use3?2:-1;
+  rows.forEach(([nm,arr],i)=>{
+    const tr=document.createElement('tr');
+    if(i===recIdx)tr.className='rec';
+    tr.innerHTML=`<td class="mname">${nm}</td><td>${fmt(arr[0])}</td><td>${fmt(arr[1])}</td><td>${fmt(arr[2])}</td>`;
+    mb.appendChild(tr);
+  });
+  const trR=document.createElement('tr');trR.className='rec';
+  trR.innerHTML=`<td class="mname">建議採用</td><td>${fmt(r.rec[0])}</td><td>${fmt(r.rec[1])}</td><td>${fmt(r.rec[2])}</td>`;
+  mb.appendChild(trR);
+
+  const favName={a:names.A+'（a）',b:names.B+'（b）',c:names.C+'（c）'}[r.fav];
+  $('o_fav').textContent=favName;
+  $('o_range1').textContent=r.range1[0]===r.range1[1]?fmt(r.range1[0]):fmt(r.range1[0])+' ~ '+fmt(r.range1[1]);
+  $('o_range2').textContent=r.range2[0]===r.range2[1]?fmt(r.range2[0]):fmt(r.range2[0])+' ~ '+fmt(r.range2[1]);
+  const adv=$('advice');adv.className='note '+(r.warn?'warn':'good');adv.innerHTML=r.advice;
+
+  $('paysteps').innerHTML=`
+    <div class="step"><div class="num">1</div><div class="body"><div class="t">${names.A} 撥給 ${names.B}（含代轉 c）</div><div class="d">a 方只需匯這一筆</div><div class="a">${fmt(r.pay1)}</div></div></div>
+    <div class="step"><div class="num">2</div><div class="body"><div class="t">${names.B} 轉付 ${names.C}（c 的分潤）</div><div class="d">代收轉付，非 b 方所得</div><div class="a">${fmt(r.pay2)}</div></div></div>
+    <div class="step"><div class="num">3</div><div class="body"><div class="t">${names.B} 淨留存 ＝ ① − ②</div><div class="d">真正留在 ${names.B} 手上</div><div class="a">${fmt(r.net3)}</div></div></div>`;
+  $('lbl_net').textContent=names.B+' 淨留存';
+  $('o_net3').textContent=fmt(r.net3);
+  $('lbl_akeep').textContent=names.A+' 自己留存';
+  $('o_akeep').textContent=fmt(r.aKeep);
+}
+
+['nameA','nameB','nameC','month','salary','months','mult','a','b','c','tax','disc','deferred']
+  .forEach(id=>{const el=$(id);el.addEventListener('input',render);});
+
+function buildMessage(){
+  if(!last)return'';
+  const {r,names,month}=last;
+  return `📊 獎金分潤試算 ${month?('· '+month):''}\n`+
+    `────────────\n`+
+    `總手收 a＋b＋c：${fmt(r.total)}\n`+
+    `淨收入 e：${fmt(r.e)}（落點 ${pct(r.rate)}）\n`+
+    `總獎金（稅後）：${fmt(r.afterTax)}\n`+
+    `────────────\n`+
+    `建議分潤（稅後）\n`+
+    `· ${names.A}（a）：${fmt(r.rec[0])}\n`+
+    `· ${names.B}（b）：${fmt(r.rec[1])}\n`+
+    `· ${names.C}（c）：${fmt(r.rec[2])}\n`+
+    `────────────\n`+
+    `撥付路徑\n`+
+    `① ${names.A}→${names.B}（含代轉）：${fmt(r.pay1)}\n`+
+    `② ${names.B}→${names.C}：${fmt(r.pay2)}\n`+
+    `③ ${names.B} 淨留存：${fmt(r.net3)}`;
+}
+
+const LIFF_ID = "YOUR_LIFF_ID_HERE";
+let inClient=false;
+async function initLiff(){
+  const st=$('status');
+  if(typeof liff==='undefined'||LIFF_ID==='YOUR_LIFF_ID_HERE'){
+    st.textContent='🌐 網頁預覽模式（尚未設定 LIFF ID，計算功能正常）';
+    return;
+  }
+  try{
+    await liff.init({liffId:LIFF_ID});
+    inClient=liff.isInClient();
+    if(liff.isLoggedIn()){
+      try{
+        const p=await liff.getProfile();
+        $('avatar').src=p.pictureUrl||'';
+        $('uname').textContent=p.displayName||'';
+        $('greet').style.display='inline-flex';
+      }catch(e){}
+    }
+    st.textContent=inClient?'✅ 已在 LINE 中開啟':'✅ LIFF 已就緒';
+  }catch(err){
+    st.textContent='⚠️ LIFF 初始化失敗：'+err.message+'（計算功能仍可用）';
+  }
+}
+$('sendBtn').addEventListener('click',async()=>{
+  const msg=buildMessage();
+  if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){
+    try{
+      await liff.sendMessages([{type:'text',text:msg}]);
+      $('status').textContent='✅ 已傳送到聊天室';
+      if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);
+    }catch(err){$('status').textContent='⚠️ 傳送失敗：'+err.message;}
+  }else{
+    try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 非 LINE 環境，結果已複製到剪贼絿';}
+    catch(e){alert(msg);}
+  }
+});
+$('closeBtn').addEventListener('click',()=>{
+  if(typeof liff!=='undefined'&&liff.isInClient&&liff.isInClient())liff.closeWindow();
+  else $('status').textContent='（網頁模式無法镜镉視窗）';
+});
+render();
+initLiff();
+</script>
+</body>
+</html>
