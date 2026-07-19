@@ -312,9 +312,11 @@ function compute(inp){
   const net3=pay1-pay2;
   const aKeep=afterTax-pay1;
 
+  // 有利方
   let fav='c';
   if(a>=b&&a>=c) fav='a'; else if(b>=a&&b>=c) fav='b';
 
+  // 建議文字
   let advice, warn=false;
   if(a<duty){
     warn=true;
@@ -325,6 +327,7 @@ function compute(inp){
     advice=`a 已覆蓋責任額，但有利方非 b，宜按手收比例或綜效分配，建議採 <b>①／② 折衷</b>。`;
   }
 
+  const e62range=[m1[3-3],m2[0],m3[0]]; // not used
   return {avg,d,duty,total,e,rate,pre,afterDisc,afterTax,gap,bNet,cNet,
     m1,m2,m3,use3,rec,pay1,pay2,net3,aKeep,fav,advice,warn,
     range1:[Math.min(m1[1]+m1[2],m2[1]+m2[2],m3[1]+m3[2]),Math.max(m1[1]+m1[2],m2[1]+m2[2],m3[1]+m3[2])],
@@ -360,6 +363,7 @@ function render(){
   $('o_afterdisc').textContent=fmt(r.afterDisc);
   $('o_aftertax').textContent=fmt(r.afterTax);
 
+  // bar (依建議分潤)
   const tot=r.rec[0]+r.rec[1]+r.rec[2];
   const bar=$('bar');bar.innerHTML='';
   const segs=[['seg-a',r.rec[0]],['seg-b',r.rec[1]],['seg-c',r.rec[2]]];
@@ -369,6 +373,7 @@ function render(){
     if(w>10)s.textContent=Math.round(w)+'%';bar.appendChild(s);
   });
 
+  // method table
   const mb=$('mbody');mb.innerHTML='';
   const rows=[['① 手收比例',r.m1],['② Shapley',r.m2],['③ a 自扛',r.m3]];
   const recIdx=r.use3?2:-1;
@@ -382,12 +387,14 @@ function render(){
   trR.innerHTML=`<td class="mname">建議採用</td><td>${fmt(r.rec[0])}</td><td>${fmt(r.rec[1])}</td><td>${fmt(r.rec[2])}</td>`;
   mb.appendChild(trR);
 
+  // 建議
   const favName={a:names.A+'（a）',b:names.B+'（b）',c:names.C+'（c）'}[r.fav];
   $('o_fav').textContent=favName;
   $('o_range1').textContent=r.range1[0]===r.range1[1]?fmt(r.range1[0]):fmt(r.range1[0])+' ~ '+fmt(r.range1[1]);
   $('o_range2').textContent=r.range2[0]===r.range2[1]?fmt(r.range2[0]):fmt(r.range2[0])+' ~ '+fmt(r.range2[1]);
   const adv=$('advice');adv.className='note '+(r.warn?'warn':'good');adv.innerHTML=r.advice;
 
+  // 撥付
   $('paysteps').innerHTML=`
     <div class="step"><div class="num">1</div><div class="body"><div class="t">${names.A} 撥給 ${names.B}（含代轉 c）</div><div class="d">a 方只需匯這一筆</div><div class="a">${fmt(r.pay1)}</div></div></div>
     <div class="step"><div class="num">2</div><div class="body"><div class="t">${names.B} 轉付 ${names.C}（c 的分潤）</div><div class="d">代收轉付，非 b 方所得</div><div class="a">${fmt(r.pay2)}</div></div></div>
@@ -398,9 +405,11 @@ function render(){
   $('o_akeep').textContent=fmt(r.aKeep);
 }
 
+/* 綁定所有輸入 */
 ['nameA','nameB','nameC','month','salary','months','mult','a','b','c','tax','disc','deferred']
   .forEach(id=>{const el=$(id);el.addEventListener('input',render);});
 
+/* ====== 傳送結果訊息 ====== */
 function buildMessage(){
   if(!last)return'';
   const {r,names,month}=last;
@@ -421,8 +430,11 @@ function buildMessage(){
     `③ ${names.B} 淨留存：${fmt(r.net3)}`;
 }
 
-const LIFF_ID = "YOUR_LIFF_ID_HERE";
+/* ====== LIFF 整合 ====== */
+// 👉 部署前把下面換成你的 LIFF ID
+const LIFF_ID = "2010756481-F4f3Rv9B";
 let inClient=false;
+
 async function initLiff(){
   const st=$('status');
   if(typeof liff==='undefined'||LIFF_ID==='YOUR_LIFF_ID_HERE'){
@@ -445,6 +457,7 @@ async function initLiff(){
     st.textContent='⚠️ LIFF 初始化失敗：'+err.message+'（計算功能仍可用）';
   }
 }
+
 $('sendBtn').addEventListener('click',async()=>{
   const msg=buildMessage();
   if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){
@@ -454,14 +467,16 @@ $('sendBtn').addEventListener('click',async()=>{
       if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);
     }catch(err){$('status').textContent='⚠️ 傳送失敗：'+err.message;}
   }else{
-    try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 非 LINE 環境，結果已複製到剪贼絿';}
+    // 網頁模式：複製到剪貼簿
+    try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 非 LINE 環境，結果已複製到剪貼簿';}
     catch(e){alert(msg);}
   }
 });
 $('closeBtn').addEventListener('click',()=>{
   if(typeof liff!=='undefined'&&liff.isInClient&&liff.isInClient())liff.closeWindow();
-  else $('status').textContent='（網頁模式無法镜镉視窗）';
+  else $('status').textContent='（網頁模式無法關閉視窗）';
 });
+
 render();
 initLiff();
 </script>
