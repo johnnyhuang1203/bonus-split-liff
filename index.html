@@ -295,11 +295,15 @@ function renderCustomers(){
   const tb=$('cust_body');tb.innerHTML='';
   DB.gz.forEach(c=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${c.姓名}</td><td>${c.組別}</td><td>${c.掛單人}</td>`;tb.appendChild(tr);});
   // customer dropdown for add-手收
-  fillSelect($('a_cust'),DB.gz.map(c=>({v:c.姓名,t:c.姓名+'（'+c.組別+'）'})));
+  const selfOpts=Object.keys(DB.people).map(w=>({v:'__A_'+w+'__',t:w+'客戶（累加到自己手收 a）'}));
+  fillSelect($('a_cust'),selfOpts.concat(DB.gz.map(c=>({v:c.姓名,t:c.姓名+'（'+c.組別+'）'}))));
   onCustChange();
 }
+function selfWho(v){return (v&&v.indexOf('__A_')===0)?v.slice(4,-2):null;}
 function onCustChange(){
-  const name=$('a_cust').value;const c=DB.gz.find(x=>x.姓名===name);
+  const val=$('a_cust').value;const sw=selfWho(val);
+  if(sw){$('a_attr').textContent='→ 累加到 '+sw+' 的「自己手收 a」（直接加進當月 a 欄位，不記入客戶明細）';return;}
+  const c=DB.gz.find(x=>x.姓名===val);
   $('a_attr').textContent=c?('→ 組別：'+c.組別+'　掛單人：'+c.掛單人+'　（會算進 '+c.掛單人+' 的 '+(c.組別.indexOf('特別組')>=0?'c':'b')+'）'):'';
 }
 function renderDetail(){
@@ -353,14 +357,22 @@ function renderAll(){
 
 /* ====== 動作 ====== */
 async function doAddDetail(){
-  const name=$('a_cust').value,month=$('a_month').value.trim(),fee=parseFloat($('a_fee').value)||0;
+  const val=$('a_cust').value,month=$('a_month').value.trim(),fee=parseFloat($('a_fee').value)||0;
   const m=$('a_msg');m.style.display='block';
   if(!month||!fee){m.className='msg err';m.textContent='請填月份與手收金額';return;}
-  const cust=DB.gz.find(x=>x.姓名===name);
+  const sw=selfWho(val);
+  if(sw){
+    m.className='msg';m.textContent='累加中…';
+    const res=await writeBlob(d=>{d.mp=d.mp||[];let e=d.mp.find(p=>p.w===sw&&String(p.m)===String(month));if(e){e.a=(Number(e.a)||0)+fee;}else{d.mp.push({w:sw,m:String(month),a:fee,disc:(sw==='夙君'?0.1:0),def:0});}});
+    if(res.ok){const cur=monthParam(sw,month).手收a;m.className='msg ok';m.textContent='✅ 已累加到 '+sw+' 自己手收 a：'+month+' ＋'+fmt(fee)+'（目前 a＝'+fmt(cur)+'）';$('a_fee').value='';renderAll();}
+    else{m.className='msg err';m.textContent='✗ 累加失敗：'+res.error;}
+    return;
+  }
+  const cust=DB.gz.find(x=>x.姓名===val);
   if(!cust){m.className='msg err';m.textContent='找不到此客戶，請先到「客戶」新增';return;}
   m.className='msg';m.textContent='寫入中…';
-  const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:name,m:month,f:fee,g:cust.組別,w:cust.掛單人});});
-  if(res.ok){m.className='msg ok';m.textContent='✅ 已寫入明細：'+name+' '+month+' '+fmt(fee)+'（進 '+cust.掛單人+' 的 '+(cust.組別.indexOf('特別組')>=0?'c':'b')+'）';$('a_fee').value='';renderAll();}
+  const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:val,m:month,f:fee,g:cust.組別,w:cust.掛單人});});
+  if(res.ok){m.className='msg ok';m.textContent='✅ 已寫入明細：'+val+' '+month+' '+fmt(fee)+'（進 '+cust.掛單人+' 的 '+(cust.組別.indexOf('特別組')>=0?'c':'b')+'）';$('a_fee').value='';renderAll();}
   else{m.className='msg err';m.textContent='✗ 寫入失敗：'+res.error;}
 }
 async function doAddCustomer(){
