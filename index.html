@@ -134,6 +134,22 @@
       <div class="msg" id="a_msg" style="display:none"></div>
     </div>
     <div class="card">
+      <h2><span class="dot"></span>自己手收 a 清單（夙君／書敏）<span class="chip" id="selfa_count"></span></h2>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px">這裡是累加到各人「自己手收 a」的紀錄，點右側 ✎ 可修改金額或刪除。</div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>掛單人</th><th>月份</th><th>手收 a</th><th>修改</th></tr></thead><tbody id="selfa_body"></tbody></table></div>
+      <div id="sa_edit" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--plum);border-radius:12px;background:var(--plum-tint)">
+        <div style="font-weight:700;margin-bottom:8px;color:var(--plum)">✎ 修改自己手收 a</div>
+        <div id="sa_head" style="font-size:12.5px;color:var(--ink-soft);margin-bottom:8px"></div>
+        <div class="field"><label>手收 a（元）</label><input type="number" id="sa_val" inputmode="numeric"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <button class="btn" id="sa_save">儲存修改</button>
+          <button class="btn ghost" id="sa_cancel">取消</button>
+          <button class="btn" id="sa_del" style="background:var(--warn);border-color:var(--warn);color:#fff">🗑 刪除此筆</button>
+        </div>
+        <div class="msg" id="sa_msg" style="display:none"></div>
+      </div>
+    </div>
+    <div class="card">
       <h2><span class="dot"></span>找不到客戶？新增客戶</h2>
       <div class="field"><label>客戶姓名</label><input type="text" id="nc_name"></div>
       <div class="grid2">
@@ -370,6 +386,44 @@ function delDetail(){
     else{em.className='msg err';em.textContent='✗ 刪除失敗：'+res.error;}
   });
 }
+function renderSelfA(){
+  const list=DB.monthParams.filter(p=>Number(p.手收a)>0).slice().sort((a,b)=>a.掛單人.localeCompare(b.掛單人)||String(a.月份).localeCompare(String(b.月份)));
+  $('selfa_count').textContent=list.length+' 筆';
+  const tb=$('selfa_body');tb.innerHTML='';
+  if(!list.length){tb.innerHTML='<tr><td colspan="4" style="color:var(--ink-soft)">目前沒有自己手收 a 紀錄</td></tr>';return;}
+  list.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${p.掛單人}</td><td>${p.月份}</td><td class="num">${fmt(p.手收a)}</td><td><button type="button" class="sa-edit-btn" data-w="${p.掛單人}" data-m="${p.月份}" style="padding:3px 10px;border:1px solid var(--line);background:var(--card);border-radius:7px;cursor:pointer;font-size:14px">✎</button></td>`;tb.appendChild(tr);});
+  tb.querySelectorAll('.sa-edit-btn').forEach(b=>b.onclick=()=>editSelfA(b.dataset.w,b.dataset.m));
+}
+let saW=null,saM=null,saDelArm=false;
+function editSelfA(who,month){
+  const mp=DB.monthParams.find(p=>p.掛單人===who&&String(p.月份)===String(month));if(!mp)return;
+  saW=who;saM=String(month);saDelArm=false;
+  $('sa_head').textContent='掛單人：'+who+'　月份：'+month;
+  $('sa_val').value=mp.手收a;
+  $('sa_del').textContent='🗑 刪除此筆';
+  const em=$('sa_msg');em.style.display='none';
+  const p=$('sa_edit');p.style.display='block';p.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function closeSelfA(){saW=null;saM=null;saDelArm=false;const p=$('sa_edit');if(p)p.style.display='none';}
+async function saveSelfA(){
+  if(!saW)return;
+  const val=parseFloat($('sa_val').value)||0;const em=$('sa_msg');em.style.display='block';
+  if(val<=0){em.className='msg err';em.textContent='金額需大於 0（若要移除請按刪除）';return;}
+  em.className='msg';em.textContent='儲存中…';const w=saW,mo=saM;
+  const res=await writeBlob(d=>{d.mp=d.mp||[];let e=d.mp.find(p=>p.w===w&&String(p.m)===mo);if(e){e.a=val;}else{d.mp.push({w:w,m:mo,a:val,disc:(w==='夙君'?0.1:0),def:0});}});
+  if(res.ok){em.className='msg ok';em.textContent='✅ 已更新 '+w+' '+mo+' 自己手收 a＝'+fmt(val);closeSelfA();renderAll();}
+  else{em.className='msg err';em.textContent='✗ 儲存失敗：'+res.error;}
+}
+function delSelfA(){
+  if(!saW)return;const b=$('sa_del');
+  if(!saDelArm){saDelArm=true;b.textContent='⚠️ 確定刪除？再按一次';setTimeout(()=>{if(saDelArm){saDelArm=false;b.textContent='🗑 刪除此筆';}},4000);return;}
+  saDelArm=false;b.textContent='🗑 刪除此筆';
+  const em=$('sa_msg');em.style.display='block';em.className='msg';em.textContent='刪除中…';const w=saW,mo=saM;
+  writeBlob(d=>{d.mp=d.mp||[];const e=d.mp.find(p=>p.w===w&&String(p.m)===mo);if(e)e.a=0;}).then(res=>{
+    if(res.ok){em.className='msg ok';em.textContent='✅ 已刪除（歸零）此筆自己手收 a';closeSelfA();renderAll();}
+    else{em.className='msg err';em.textContent='✗ 刪除失敗：'+res.error;}
+  });
+}
 function renderReport(){
   const tb=$('report_body');tb.innerHTML='';
   const months=allMonths().filter(m=>m>='202608');
@@ -409,7 +463,7 @@ function renderAll(){
   fillSelect($('c_month'),allMonths().filter(m=>m>='202608').reverse(),$('c_month').value||'202608');
   fillSelect($('nc_grp'),['夙君客戶','書敏客戶','特別組']);
   fillSelect($('nc_who'),whos);
-  renderCustomers();renderDetail();renderReport();renderHist();onWhoMonthChange();
+  renderCustomers();renderDetail();renderSelfA();renderReport();renderHist();onWhoMonthChange();
 }
 
 /* ====== 動作 ====== */
@@ -468,6 +522,9 @@ $('d_filter').addEventListener('change',()=>{closeEdit();renderDetail();});
 $('e_save').addEventListener('click',saveEdit);
 $('e_cancel').addEventListener('click',closeEdit);
 $('e_del').addEventListener('click',delDetail);
+$('sa_save').addEventListener('click',saveSelfA);
+$('sa_cancel').addEventListener('click',closeSelfA);
+$('sa_del').addEventListener('click',delSelfA);
 
 /* ====== 傳送訊息 ====== */
 function buildMessage(){const L=window.__last;if(!L)return'';const r=L.r;
