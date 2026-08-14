@@ -99,9 +99,9 @@
     </div>
     <div class="card">
       <h2><span class="dot"></span>本月手收（自動帶入）</h2>
-      <div class="rline"><span class="k"><span class="tag-a">a</span>自己</span><span class="v" id="o_a"></span></div>
-      <div class="rline"><span class="k"><span class="tag-b">b</span>經理（<span id="lbl_b"></span> 當月合計）</span><span class="v" id="o_b"></span></div>
-      <div class="rline"><span class="k"><span class="tag-c">c</span>外部（<span id="lbl_c"></span> 當月合計）</span><span class="v" id="o_c"></span></div>
+      <div class="rline"><span class="k"><span class="tag-a">a</span><span id="lbl_a">自己</span></span><span class="v" id="o_a"></span></div>
+      <div class="rline"><span class="k"><span class="tag-b">b</span><span id="lbl_b"></span>（當月合計）</span><span class="v" id="o_b"></span></div>
+      <div class="rline"><span class="k"><span class="tag-c">c</span><span id="lbl_c"></span>（當月合計）</span><span class="v" id="o_c"></span></div>
     </div>
     <div class="card">
       <h2><span class="dot"></span>本月總獎金</h2>
@@ -115,7 +115,7 @@
     <div class="card">
       <h2><span class="dot"></span>建議分潤與撥付（稅後）</h2>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px">各種分潤模型下，三方各拿多少（稅後）。可在下方「採用模型」選定一種，① ② ③ 撥付與月報會依此計算。</div>
-      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>模型</th><th>自己 a</th><th>經理 b</th><th>外部 c</th></tr></thead><tbody id="model_body"></tbody></table></div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>模型</th><th id="mh_a">自己 a</th><th id="mh_b">經理 b</th><th id="mh_c">外部 c</th></tr></thead><tbody id="model_body"></tbody></table></div>
       <div style="font-size:11px;color:var(--ink-soft);margin:6px 0 10px">・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・夙君自扛：責任額全由夙君自己 a 吸收，特別組不被抵扣（自己 a 可能為負＝夙君自掏補足）。・綜合：系統原本的折衷建議。</div>
       <div class="field"><label>採用模型（撥付與月報依此）</label><select id="model_sel">
         <option value="auto">綜合（系統原建議）</option>
@@ -125,12 +125,12 @@
         <option value="dutyshared">責任額由 b／c 分攤</option>
       </select></div>
       <div class="bar" id="bar" style="margin-top:6px"></div>
-      <div class="legend"><span><i style="background:var(--clay)"></i>自己 a</span><span><i style="background:var(--sky)"></i>經理 b</span><span><i style="background:var(--plum)"></i>外部 c</span></div>
-      <div class="rline" style="margin-top:6px"><span class="k">採用：經理 b</span><span class="v" id="o_recb"></span></div>
-      <div class="rline"><span class="k">採用：外部 c</span><span class="v" id="o_recc"></span></div>
-      <div class="rline"><span class="k">① 撥給經理（含代轉 c）</span><span class="v" id="o_pay1"></span></div>
-      <div class="rline"><span class="k">② 經理轉付外部</span><span class="v" id="o_pay2"></span></div>
-      <div class="rline"><span class="k">③ 經理淨留存</span><span class="v" id="o_net3"></span></div>
+      <div class="legend"><span><i style="background:var(--clay)"></i><span id="lg_a">自己 a</span></span><span><i style="background:var(--sky)"></i><span id="lg_b">經理 b</span></span><span><i style="background:var(--plum)"></i><span id="lg_c">外部 c</span></span></div>
+      <div class="rline" style="margin-top:6px"><span class="k" id="k_recb">採用：經理 b</span><span class="v" id="o_recb"></span></div>
+      <div class="rline"><span class="k" id="k_recc">採用：外部 c</span><span class="v" id="o_recc"></span></div>
+      <div class="rline"><span class="k" id="k_pay1">① 撥給經理（含代轉 c）</span><span class="v" id="o_pay1"></span></div>
+      <div class="rline"><span class="k" id="k_pay2">② 經理轉付外部</span><span class="v" id="o_pay2"></span></div>
+      <div class="rline"><span class="k" id="k_net3">③ 經理淨留存</span><span class="v" id="o_net3"></span></div>
       <div class="msg" id="advice" style="display:block"></div>
     </div>
     <button class="btn" id="sendBtn">傳送結果到聊天室</button>
@@ -329,7 +329,13 @@ function renderCalc(){
   const b=agg(month,p.b組別,who), c=agg(month,p.c組別,who);
   // a/disc/def from inputs (prefilled) 
   const a=parseFloat($('c_a').value)||0, disc=parseFloat($('c_disc').value)||0, def=parseFloat($('c_def').value)||0;
-  $('lbl_b').textContent=p.b組別;$('lbl_c').textContent=p.c組別;
+  $('lbl_a').textContent=who+'自己';$('lbl_b').textContent=p.b組別;$('lbl_c').textContent=p.c組別;
+  $('mh_a').textContent=who+'自己 a';$('mh_b').textContent=p.b組別+' b';$('mh_c').textContent=p.c組別+' c';
+  $('lg_a').textContent=who+'自己 a';$('lg_b').textContent=p.b組別+' b';$('lg_c').textContent=p.c組別+' c';
+  $('k_recb').textContent='採用：'+p.b組別+' b';$('k_recc').textContent='採用：'+p.c組別+' c';
+  $('k_pay1').textContent='① 撥給 '+who+'（含代轉 '+p.c組別+'）';
+  $('k_pay2').textContent='② '+who+' 轉付 '+p.c組別;
+  $('k_net3').textContent='③ '+who+' 淨留存';
   $('o_a').textContent=fmt(a);$('o_b').textContent=fmt(b);$('o_c').textContent=fmt(c);
   const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額,model:DB.model});
   $('o_d').textContent=fmt(r.d);$('o_duty').textContent=fmt(r.duty);$('o_total').textContent=fmt(r.total);
@@ -573,7 +579,7 @@ $('sa_del').addEventListener('click',delSelfA);
 
 /* ====== 傳送訊息 ====== */
 function buildMessage(){const L=window.__last;if(!L)return'';const r=L.r;
-  return `📊 獎金分潤試算 · ${L.who} ${L.month}\n總手收：${fmt(r.total)}（落點 ${pct(r.rate)}）\n總獎金(稅後)：${fmt(r.afterTax)}\n經理淨留存：${fmt(r.net3)}\n撥給經理：${fmt(r.pay1)}／轉付外部：${fmt(r.pay2)}`;}
+  return `📊 獎金分潤試算 · ${L.who} ${L.month}\n總手收：${fmt(r.total)}（落點 ${pct(r.rate)}）\n總獎金(稅後)：${fmt(r.afterTax)}\n${L.who}淨留存：${fmt(r.net3)}\n撥給${L.who}：${fmt(r.pay1)}／轉付外部：${fmt(r.pay2)}`;}
 let inClient=false;
 $('sendBtn').addEventListener('click',async()=>{const msg=buildMessage();
   if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){try{await liff.sendMessages([{type:'text',text:msg}]);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}catch(e){$('status').textContent='⚠️ '+e.message;}}
