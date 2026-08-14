@@ -159,7 +159,26 @@
     <div class="card">
       <h2><span class="dot"></span>明細 <span class="chip" id="detail_count"></span></h2>
       <div class="field"><label>篩選月份</label><select id="d_filter"></select></div>
-      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>姓名</th><th>月份</th><th>手收</th><th>組別</th><th>掛單人</th></tr></thead><tbody id="detail_body"></tbody></table></div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px">點右側 ✎ 可修改或刪除該筆手收。</div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>姓名</th><th>月份</th><th>手收</th><th>組別</th><th>掛單人</th><th>修改</th></tr></thead><tbody id="detail_body"></tbody></table></div>
+      <div id="d_edit" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--plum);border-radius:12px;background:var(--plum-tint)">
+        <div style="font-weight:700;margin-bottom:8px;color:var(--plum)">✎ 修改明細</div>
+        <div class="field"><label>客戶姓名</label><input type="text" id="e_name"></div>
+        <div class="grid2">
+          <div class="field"><label>月份</label><input type="text" id="e_month" inputmode="numeric"></div>
+          <div class="field"><label>手收（元）</label><input type="number" id="e_fee" inputmode="numeric"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>組別</label><select id="e_grp"></select></div>
+          <div class="field"><label>掛單人</label><select id="e_who"></select></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <button class="btn" id="e_save">儲存修改</button>
+          <button class="btn ghost" id="e_cancel">取消</button>
+          <button class="btn" id="e_del" style="background:var(--warn);border-color:var(--warn);color:#fff">🗑 刪除此筆</button>
+        </div>
+        <div class="msg" id="e_msg" style="display:none"></div>
+      </div>
     </div>
   </div>
 
@@ -313,7 +332,43 @@ function renderDetail(){
   const months=['（全部）',...allMonths()];fillSelect($('d_filter'),months,$('d_filter').value||'（全部）');
   const f=$('d_filter').value;
   const tb=$('detail_body');tb.innerHTML='';
-  DB.md.filter(m=>f==='（全部）'||!f||m.月份===f).slice().reverse().forEach(m=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td>${m.組別}</td><td>${m.掛單人}</td>`;tb.appendChild(tr);});
+  DB.md.map((m,i)=>({m,i})).filter(o=>f==='（全部）'||!f||o.m.月份===f).reverse().forEach(({m,i})=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td>${m.組別}</td><td>${m.掛單人}</td><td><button type="button" class="d-edit-btn" data-i="${i}" style="padding:3px 10px;border:1px solid var(--line);background:var(--card);border-radius:7px;cursor:pointer;font-size:14px">✎</button></td>`;tb.appendChild(tr);});
+  tb.querySelectorAll('.d-edit-btn').forEach(b=>b.onclick=()=>editDetail(+b.dataset.i));
+}
+let editIdx=-1,editExp=null,delArm=false;
+function editDetail(i){
+  const m=DB.md[i];if(!m)return;
+  editIdx=i;editExp={n:m.姓名,mo:String(m.月份),f:m.手收};delArm=false;
+  $('e_name').value=m.姓名;$('e_month').value=m.月份;$('e_fee').value=m.手收;
+  fillSelect($('e_grp'),['夙君客戶','書敏客戶','特別組'],m.組別);
+  fillSelect($('e_who'),Object.keys(DB.people),m.掛單人);
+  $('e_del').textContent='🗑 刪除此筆';
+  const em=$('e_msg');em.style.display='none';
+  const p=$('d_edit');p.style.display='block';p.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function closeEdit(){editIdx=-1;editExp=null;delArm=false;const p=$('d_edit');if(p)p.style.display='none';}
+async function saveEdit(){
+  if(editIdx<0)return;
+  const name=$('e_name').value.trim(),month=$('e_month').value.trim(),fee=parseFloat($('e_fee').value)||0,grp=$('e_grp').value,who=$('e_who').value;
+  const em=$('e_msg');em.style.display='block';
+  if(!name||!month||!fee){em.className='msg err';em.textContent='請填客戶姓名、月份與手收金額';return;}
+  em.className='msg';em.textContent='儲存中…';
+  const exp=editExp,hint=editIdx;
+  const res=await writeBlob(d=>{d.md=d.md||[];let idx=hint;const sm=d.md.findIndex(x=>x.n===exp.n&&String(x.m)===exp.mo&&Number(x.f)===exp.f);if(sm>=0)idx=sm;if(idx>=0&&idx<d.md.length)d.md[idx]={n:name,m:month,f:fee,g:grp,w:who};});
+  if(res.ok){em.className='msg ok';em.textContent='✅ 已更新：'+name+' '+month+' '+fmt(fee);closeEdit();renderAll();}
+  else{em.className='msg err';em.textContent='✗ 儲存失敗：'+res.error;}
+}
+function delDetail(){
+  if(editIdx<0)return;
+  const b=$('e_del');
+  if(!delArm){delArm=true;b.textContent='⚠️ 確定刪除？再按一次';setTimeout(()=>{if(delArm){delArm=false;b.textContent='🗑 刪除此筆';}},4000);return;}
+  delArm=false;b.textContent='🗑 刪除此筆';
+  const em=$('e_msg');em.style.display='block';em.className='msg';em.textContent='刪除中…';
+  const exp=editExp,hint=editIdx;
+  writeBlob(d=>{d.md=d.md||[];let idx=hint;const sm=d.md.findIndex(x=>x.n===exp.n&&String(x.m)===exp.mo&&Number(x.f)===exp.f);if(sm>=0)idx=sm;if(idx>=0&&idx<d.md.length)d.md.splice(idx,1);}).then(res=>{
+    if(res.ok){em.className='msg ok';em.textContent='✅ 已刪除此筆';closeEdit();renderAll();}
+    else{em.className='msg err';em.textContent='✗ 刪除失敗：'+res.error;}
+  });
 }
 function renderReport(){
   const tb=$('report_body');tb.innerHTML='';
@@ -409,7 +464,10 @@ $('c_save').addEventListener('click',doSaveMonthParam);
 $('a_cust').addEventListener('change',onCustChange);
 $('a_submit').addEventListener('click',doAddDetail);
 $('nc_submit').addEventListener('click',doAddCustomer);
-$('d_filter').addEventListener('change',renderDetail);
+$('d_filter').addEventListener('change',()=>{closeEdit();renderDetail();});
+$('e_save').addEventListener('click',saveEdit);
+$('e_cancel').addEventListener('click',closeEdit);
+$('e_del').addEventListener('click',delDetail);
 
 /* ====== 傳送訊息 ====== */
 function buildMessage(){const L=window.__last;if(!L)return'';const r=L.r;
