@@ -114,10 +114,20 @@
     </div>
     <div class="card">
       <h2><span class="dot"></span>建議分潤與撥付（稅後）</h2>
-      <div class="bar" id="bar"></div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px">各種分潤模型下，三方各拿多少（稅後）。可在下方「採用模型」選定一種，① ② ③ 撥付與月報會依此計算。</div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>模型</th><th>自己 a</th><th>經理 b</th><th>外部 c</th></tr></thead><tbody id="model_body"></tbody></table></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin:6px 0 10px">・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・夙君自扛：責任額全由夙君自己 a 吸收，特別組不被抵扣（自己 a 可能為負＝夙君自掏補足）。・綜合：系統原本的折衷建議。</div>
+      <div class="field"><label>採用模型（撥付與月報依此）</label><select id="model_sel">
+        <option value="auto">綜合（系統原建議）</option>
+        <option value="self">夙君自扛・特別組不抵扣</option>
+        <option value="ratio">比例分攤</option>
+        <option value="shapley">Shapley 公平值</option>
+        <option value="dutyshared">責任額由 b／c 分攤</option>
+      </select></div>
+      <div class="bar" id="bar" style="margin-top:6px"></div>
       <div class="legend"><span><i style="background:var(--clay)"></i>自己 a</span><span><i style="background:var(--sky)"></i>經理 b</span><span><i style="background:var(--plum)"></i>外部 c</span></div>
-      <div class="rline" style="margin-top:6px"><span class="k">建議：經理 b</span><span class="v" id="o_recb"></span></div>
-      <div class="rline"><span class="k">建議：外部 c</span><span class="v" id="o_recc"></span></div>
+      <div class="rline" style="margin-top:6px"><span class="k">採用：經理 b</span><span class="v" id="o_recb"></span></div>
+      <div class="rline"><span class="k">採用：外部 c</span><span class="v" id="o_recc"></span></div>
       <div class="rline"><span class="k">① 撥給經理（含代轉 c）</span><span class="v" id="o_pay1"></span></div>
       <div class="rline"><span class="k">② 經理轉付外部</span><span class="v" id="o_pay2"></span></div>
       <div class="rline"><span class="k">③ 經理淨留存</span><span class="v" id="o_net3"></span></div>
@@ -243,7 +253,7 @@ const SEED     = {"gz":[{"n":"梁憶慈","g":"特別組","w":"夙君"},{"n":"方
 /* ====== 計算 ====== */
 function bracket(e){if(e<=0)return 0;if(e<=200000)return .35;if(e<=400000)return .40;if(e<=600000)return .45;return .50;}
 function calc(inp){
-  const {salary,months,mult,a,b,c,tax,disc,deferred,duty0}=inp;
+  const {salary,months,mult,a,b,c,tax,disc,deferred,duty0,model}=inp;
   const avg=salary*months/12,dCalc=avg*mult,d=(duty0!=null&&duty0!==''&&!isNaN(Number(duty0)))?Number(duty0):dCalc,duty=d+deferred,total=a+b+c,e=total-duty;
   const rate=bracket(e),pre=Math.max(0,e*rate),afterDisc=pre*(1-disc),afterTax=afterDisc*(1-tax);
   const gap=Math.max(0,duty-a);
@@ -252,30 +262,34 @@ function calc(inp){
   const va=v(1,0,0),vb=v(0,1,0),vc=v(0,0,1),vab=v(1,1,0),vac=v(1,0,1),vbc=v(0,1,1),vabc=afterTax;
   const m1=[total===0?0:afterTax*a/total,total===0?0:afterTax*b/total,total===0?0:afterTax*c/total];
   const m2=[1/3*va+1/6*(vab-vb)+1/6*(vac-vc)+1/3*(vabc-vbc),1/3*vb+1/6*(vab-va)+1/6*(vbc-vc)+1/3*(vabc-vac),1/3*vc+1/6*(vac-va)+1/6*(vbc-vb)+1/3*(vabc-vab)];
-  const m3=[0,cN,bN].map((x,i)=>i===0?0:0); // placeholder
-  const m3c=cN*rate*(1-disc)*(1-tax),m3b=bN*rate*(1-disc)*(1-tax),m3a=Math.max(0,afterTax-m3b-m3c);
-  const M3=[m3a,m3b,m3c];
+  const K=rate*(1-disc)*(1-tax);
+  const m3c=cN*K,m3b=bN*K,m3a=Math.max(0,afterTax-m3b-m3c);const M3=[m3a,m3b,m3c];
+  // 夙君自扛：責任額全由夙君自己 a 吸收，夙君客戶 b、特別組 c 皆不被抵扣（m4a 可為負＝夙君自掏補足）
+  const m4b=b*K,m4c=c*K,m4a=afterTax-m4b-m4c;const M4=[m4a,m4b,m4c];
   const use3=(a>=duty)&&(b>=a)&&(b>=c);
-  const rec=[use3?M3[0]:(m1[0]+m2[0])/2,use3?M3[1]:(m1[1]+m2[1])/2,use3?M3[2]:(m1[2]+m2[2])/2];
+  const auto=[use3?M3[0]:(m1[0]+m2[0])/2,use3?M3[1]:(m1[1]+m2[1])/2,use3?M3[2]:(m1[2]+m2[2])/2];
+  const self4=(a>=duty)?auto.slice():M4.slice();
+  const models={ratio:m1,shapley:m2,dutyshared:M3,self:self4,auto:auto};
+  const rec=(models[model]||auto).slice();
   const pay1=rec[1]+rec[2],pay2=rec[2],net3=pay1-pay2,aKeep=afterTax-pay1;
   let advice,warn=false;
-  if(a<duty){warn=true;advice="a 未達應扣總額，缺口由 b＋c 吸收，建議採 ①／② 折衷。";}
-  else if(use3){advice="a 已覆蓋責任額且經理為有利方，建議採 ③（責任額由 a 自扛）。";}
-  else{advice="a 已覆蓋責任額，建議採 ①／② 折衷。";}
-  return {d,duty,total,e,rate,afterTax,rec,pay1,pay2,net3,aKeep,advice,warn};
+  if(a<duty){warn=true;advice="夙君自己手收未達責任額（缺口 "+fmt(gap)+"）。各模型呈現如下，可依「採用模型」選定。";}
+  else{advice="夙君自己手收已覆蓋責任額。各模型呈現如下，可依「採用模型」選定。";}
+  return {d,dCalc,duty,total,e,rate,afterTax,gap,models,rec,pay1,pay2,net3,aKeep,advice,warn};
 }
 const fmt=n=>{if(!isFinite(n))n=0;return Math.round(n).toLocaleString('en-US');};
 const pct=n=>(n*100).toFixed(0)+'%';
 const $=id=>document.getElementById(id);
 
 /* ====== 資料狀態 ====== */
-let DB={gz:[],md:[],people:{},monthParams:[],tax:0.2,raw:null};
+let DB={gz:[],md:[],people:{},monthParams:[],tax:0.2,model:'auto',raw:null};
 function loadData(s){
   DB.gz=(s.gz||[]).map(r=>({姓名:r.n,組別:r.g,掛單人:r.w}));
   DB.md=(s.md||[]).map(r=>({姓名:r.n,月份:String(r.m),手收:Number(r.f)||0,組別:r.g,掛單人:r.w}));
   DB.people={};Object.keys(s.people||{}).forEach(k=>{const p=s.people[k];DB.people[k]={月薪:p.月薪,月數:p.年薪月數,倍數:p.責任額倍數,b組別:p.b組別,c組別:p.c組別,責任額:(p.責任額!=null?p.責任額:null)};});
   DB.monthParams=(s.mp||[]).map(r=>({掛單人:r.w,月份:String(r.m),手收a:Number(r.a)||0,折扣:Number(r.disc)||0,遞延:Number(r.def)||0}));
   DB.tax=(s.tax!=null)?s.tax:0.2;
+  DB.model=s.model||'auto';
 }
 function agg(month,grp,who){return DB.md.filter(m=>m.月份===month&&m.組別===grp&&m.掛單人===who).reduce((s,m)=>s+m.手收,0);}
 function monthParam(who,month){return DB.monthParams.find(p=>p.掛單人===who&&p.月份===month)||{手收a:0,折扣:(who==='夙君'?0.1:0),遞延:0};}
@@ -317,9 +331,13 @@ function renderCalc(){
   const a=parseFloat($('c_a').value)||0, disc=parseFloat($('c_disc').value)||0, def=parseFloat($('c_def').value)||0;
   $('lbl_b').textContent=p.b組別;$('lbl_c').textContent=p.c組別;
   $('o_a').textContent=fmt(a);$('o_b').textContent=fmt(b);$('o_c').textContent=fmt(c);
-  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額});
+  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額,model:DB.model});
   $('o_d').textContent=fmt(r.d);$('o_duty').textContent=fmt(r.duty);$('o_total').textContent=fmt(r.total);
   $('o_e').textContent=fmt(r.e);$('o_rate').textContent=pct(r.rate);$('o_aftertax').textContent=fmt(r.afterTax);
+  const MLAB=[['self','夙君自扛（特別組不抵扣）'],['auto','綜合（原建議）'],['ratio','比例分攤'],['shapley','Shapley 公平值'],['dutyshared','責任額由 b／c 分攤']];
+  const mtb=$('model_body');mtb.innerHTML='';
+  MLAB.forEach(([key,lab])=>{const mm=r.models[key]||[0,0,0];const on=(DB.model===key);const tr=document.createElement('tr');if(on)tr.style.cssText='background:var(--plum-tint);font-weight:700';tr.innerHTML=`<td>${on?'✓ ':''}${lab}</td><td class="num">${fmt(mm[0])}</td><td class="num">${fmt(mm[1])}</td><td class="num">${fmt(mm[2])}</td>`;mtb.appendChild(tr);});
+  if($('model_sel').value!==DB.model)$('model_sel').value=DB.model;
   const tot=r.rec[0]+r.rec[1]+r.rec[2];const bar=$('bar');bar.innerHTML='';
   [['seg-a',r.rec[0]],['seg-b',r.rec[1]],['seg-c',r.rec[2]]].forEach(([cls,val])=>{const w=tot>0?val/tot*100:0;const s=document.createElement('span');s.className=cls;s.style.width=w+'%';if(w>12)s.textContent=Math.round(w)+'%';bar.appendChild(s);});
   $('o_recb').textContent=fmt(r.rec[1]);$('o_recc').textContent=fmt(r.rec[2]);
@@ -457,7 +475,7 @@ function renderReport(){
     months.forEach(month=>{
       const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&mp.手收a===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model});
       const tr=document.createElement('tr');tr.innerHTML=`<td>${who}</td><td>${month}</td><td class="num">${fmt(mp.手收a)}</td><td class="num">${fmt(b)}</td><td class="num">${fmt(c)}</td><td class="num">${fmt(r.afterTax)}</td><td class="num">${fmt(r.net3)}</td>`;tb.appendChild(tr);
     });
   });
@@ -470,7 +488,7 @@ function renderHist(){
   Object.keys(DB.people).forEach(who=>{const p=DB.people[who];
     months.forEach(month=>{const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&(mp.手收a||0)===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model});
       newTotal+=r.afterTax;});});
   $('ov_old').textContent=fmt(OLD.recTotal);
   $('ov_oldfee').textContent=fmt(OLD.feeTotal);
@@ -541,6 +559,7 @@ $('c_month').addEventListener('change',onWhoMonthChange);
 ['c_a','c_disc','c_def'].forEach(id=>$(id).addEventListener('input',renderCalc));
 $('c_save').addEventListener('click',doSaveMonthParam);
 $('duty_save').addEventListener('click',doSaveDuty);
+$('model_sel').addEventListener('change',async()=>{const val=$('model_sel').value;DB.model=val;renderCalc();const res=await writeBlob(d=>{d.model=val;});if(res.ok){renderAll();}else{renderReport();}});
 $('a_cust').addEventListener('change',onCustChange);
 $('a_submit').addEventListener('click',doAddDetail);
 $('nc_submit').addEventListener('click',doAddCustomer);
