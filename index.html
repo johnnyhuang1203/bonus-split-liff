@@ -167,6 +167,19 @@
       </div>
     </div>
     <div class="card">
+      <h2><span class="dot"></span>特別組遞延給付 <span class="chip" id="defer_count"></span></h2>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px">記錄延後給付給特別組的款項；填「給付月份」後會自動併入該月特別組 c 手收一起試算。特別組遞延累計：<b id="defer_sum" style="color:var(--plum)">0</b></div>
+      <div class="grid2">
+        <div class="field"><label>給付月份 <span class="hint">如 202610</span></label><input type="text" id="df_month" inputmode="numeric"></div>
+        <div class="field"><label>金額（元）</label><input type="number" id="df_fee" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>備註（可留空）</label><input type="text" id="df_note"></div>
+      <button class="btn" id="df_submit">新增遞延給付</button>
+      <div class="msg" id="df_msg" style="display:none"></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin:8px 0 4px">要修改或刪除，請到「明細」找同月份的「特別組遞延…」那筆。</div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>項目</th><th>給付月份</th><th>金額</th></tr></thead><tbody id="defer_body"></tbody></table></div>
+    </div>
+    <div class="card">
       <h2><span class="dot"></span>找不到客戶？新增客戶</h2>
       <div class="field"><label>客戶姓名</label><input type="text" id="nc_name"></div>
       <div class="grid2">
@@ -473,6 +486,26 @@ function delSelfA(){
     else{em.className='msg err';em.textContent='✗ 刪除失敗：'+res.error;}
   });
 }
+function isDefer(m){return m.組別==='特別組'&&String(m.姓名).indexOf('特別組遞延')===0;}
+function renderDefer(){
+  const list=DB.md.filter(isDefer);
+  const sum=list.reduce((s,m)=>s+(Number(m.手收)||0),0);
+  const cc=$('defer_count'); if(cc)cc.textContent=list.length+' 筆';
+  const ds=$('defer_sum'); if(ds)ds.textContent=fmt(sum);
+  const tb=$('defer_body'); if(!tb)return; tb.innerHTML='';
+  if(!list.length){tb.innerHTML='<tr><td colspan="3" style="color:var(--ink-soft)">尚無遞延給付紀錄</td></tr>';return;}
+  list.slice().reverse().forEach(m=>{tb.insertAdjacentHTML('beforeend',`<tr><td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td></tr>`);});
+}
+async function doAddDefer(){
+  const month=$('df_month').value.trim(),fee=parseFloat($('df_fee').value)||0,note=$('df_note').value.trim();
+  const m=$('df_msg');m.style.display='block';
+  if(!month||!fee){m.className='msg err';m.textContent='請填給付月份與金額';return;}
+  m.className='msg';m.textContent='寫入中…';
+  const nm='特別組遞延'+(note?'·'+note:'');
+  const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:nm,m:month,f:fee,g:'特別組',w:'夙君'});});
+  if(res.ok){m.className='msg ok';m.textContent='✅ 已新增特別組遞延給付：'+month+' ＋'+fmt(fee)+'（已併入該月特別組 c）';$('df_fee').value='';$('df_note').value='';renderAll();}
+  else{m.className='msg err';m.textContent='✗ 寫入失敗：'+res.error;}
+}
 function renderReport(){
   const tb=$('report_body');tb.innerHTML='';
   const months=allMonths().filter(m=>m>='202608');
@@ -512,7 +545,7 @@ function renderAll(){
   fillSelect($('c_month'),allMonths().filter(m=>m>='202608').reverse(),$('c_month').value||'202608');
   fillSelect($('nc_grp'),['夙君客戶','書敏客戶','特別組']);
   fillSelect($('nc_who'),whos);
-  renderCustomers();renderDetail();renderSelfA();renderReport();renderHist();renderDuty();onWhoMonthChange();
+  renderCustomers();renderDetail();renderSelfA();renderDefer();renderReport();renderHist();renderDuty();onWhoMonthChange();
 }
 
 /* ====== 動作 ====== */
@@ -576,6 +609,7 @@ $('e_del').addEventListener('click',delDetail);
 $('sa_save').addEventListener('click',saveSelfA);
 $('sa_cancel').addEventListener('click',closeSelfA);
 $('sa_del').addEventListener('click',delSelfA);
+$('df_submit').addEventListener('click',doAddDefer);
 
 /* ====== 傳送訊息 ====== */
 function buildMessage(){const L=window.__last;if(!L)return'';const r=L.r;
