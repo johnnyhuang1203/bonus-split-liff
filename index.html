@@ -91,6 +91,13 @@
       <div class="msg" id="c_msg" style="display:none"></div>
     </div>
     <div class="card">
+      <h2><span class="dot"></span>責任額設定 <span style="font-size:11.5px;font-weight:400;color:var(--ink-soft)">（可自訂，套用到試算與月報）</span></h2>
+      <div id="duty_rows"></div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px">預設＝月薪 × 年薪月數 ÷ 12 × 倍數。填「自訂責任額」可直接覆寫；留空或按「還原預設」則用公式。</div>
+      <button class="btn ghost" id="duty_save">儲存責任額</button>
+      <div class="msg" id="duty_msg" style="display:none"></div>
+    </div>
+    <div class="card">
       <h2><span class="dot"></span>本月手收（自動帶入）</h2>
       <div class="rline"><span class="k"><span class="tag-a">a</span>自己</span><span class="v" id="o_a"></span></div>
       <div class="rline"><span class="k"><span class="tag-b">b</span>經理（<span id="lbl_b"></span> 當月合計）</span><span class="v" id="o_b"></span></div>
@@ -236,8 +243,8 @@ const SEED     = {"gz":[{"n":"梁憶慈","g":"特別組","w":"夙君"},{"n":"方
 /* ====== 計算 ====== */
 function bracket(e){if(e<=0)return 0;if(e<=200000)return .35;if(e<=400000)return .40;if(e<=600000)return .45;return .50;}
 function calc(inp){
-  const {salary,months,mult,a,b,c,tax,disc,deferred}=inp;
-  const avg=salary*months/12,d=avg*mult,duty=d+deferred,total=a+b+c,e=total-duty;
+  const {salary,months,mult,a,b,c,tax,disc,deferred,duty0}=inp;
+  const avg=salary*months/12,dCalc=avg*mult,d=(duty0!=null&&duty0!==''&&!isNaN(Number(duty0)))?Number(duty0):dCalc,duty=d+deferred,total=a+b+c,e=total-duty;
   const rate=bracket(e),pre=Math.max(0,e*rate),afterDisc=pre*(1-disc),afterTax=afterDisc*(1-tax);
   const gap=Math.max(0,duty-a);
   const bN=(b+c)===0?0:Math.max(0,b-gap*b/(b+c)),cN=(b+c)===0?0:Math.max(0,c-gap*c/(b+c));
@@ -266,7 +273,7 @@ let DB={gz:[],md:[],people:{},monthParams:[],tax:0.2,raw:null};
 function loadData(s){
   DB.gz=(s.gz||[]).map(r=>({姓名:r.n,組別:r.g,掛單人:r.w}));
   DB.md=(s.md||[]).map(r=>({姓名:r.n,月份:String(r.m),手收:Number(r.f)||0,組別:r.g,掛單人:r.w}));
-  DB.people={};Object.keys(s.people||{}).forEach(k=>{const p=s.people[k];DB.people[k]={月薪:p.月薪,月數:p.年薪月數,倍數:p.責任額倍數,b組別:p.b組別,c組別:p.c組別};});
+  DB.people={};Object.keys(s.people||{}).forEach(k=>{const p=s.people[k];DB.people[k]={月薪:p.月薪,月數:p.年薪月數,倍數:p.責任額倍數,b組別:p.b組別,c組別:p.c組別,責任額:(p.責任額!=null?p.責任額:null)};});
   DB.monthParams=(s.mp||[]).map(r=>({掛單人:r.w,月份:String(r.m),手收a:Number(r.a)||0,折扣:Number(r.disc)||0,遞延:Number(r.def)||0}));
   DB.tax=(s.tax!=null)?s.tax:0.2;
 }
@@ -310,7 +317,7 @@ function renderCalc(){
   const a=parseFloat($('c_a').value)||0, disc=parseFloat($('c_disc').value)||0, def=parseFloat($('c_def').value)||0;
   $('lbl_b').textContent=p.b組別;$('lbl_c').textContent=p.c組別;
   $('o_a').textContent=fmt(a);$('o_b').textContent=fmt(b);$('o_c').textContent=fmt(c);
-  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def});
+  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額});
   $('o_d').textContent=fmt(r.d);$('o_duty').textContent=fmt(r.duty);$('o_total').textContent=fmt(r.total);
   $('o_e').textContent=fmt(r.e);$('o_rate').textContent=pct(r.rate);$('o_aftertax').textContent=fmt(r.afterTax);
   const tot=r.rec[0]+r.rec[1]+r.rec[2];const bar=$('bar');bar.innerHTML='';
@@ -324,6 +331,24 @@ function onWhoMonthChange(){
   const who=$('c_who').value, month=$('c_month').value;const mp=monthParam(who,month);
   $('c_a').value=mp.手收a;$('c_disc').value=mp.折扣;$('c_def').value=mp.遞延;
   renderCalc();
+}
+function renderDuty(){
+  const box=$('duty_rows');if(!box)return;box.innerHTML='';
+  Object.keys(DB.people).forEach(who=>{
+    const p=DB.people[who];const calcD=Math.round(p.月薪*p.月數/12*p.倍數);
+    const ov=(p.責任額!=null&&p.責任額!=='')?p.責任額:'';
+    const row=document.createElement('div');row.className='field';
+    row.innerHTML=`<label>${who}（預設 ${fmt(calcD)}）</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="numeric" id="duty_${who}" placeholder="預設 ${fmt(calcD)}" value="${ov}" style="flex:1"><button type="button" class="btn ghost duty-reset" data-w="${who}" style="padding:6px 10px;white-space:nowrap">還原預設</button></div>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll('.duty-reset').forEach(b=>b.onclick=()=>{const el=$('duty_'+b.dataset.w);if(el)el.value='';});
+}
+async function doSaveDuty(){
+  const m=$('duty_msg');m.style.display='block';m.className='msg';m.textContent='儲存中…';
+  const vals={};Object.keys(DB.people).forEach(who=>{const el=$('duty_'+who);if(!el)return;const v=el.value.trim();vals[who]=(v===''?null:(parseFloat(v)||0));});
+  const res=await writeBlob(d=>{d.people=d.people||{};Object.keys(vals).forEach(who=>{if(d.people[who]){if(vals[who]==null){delete d.people[who].責任額;}else{d.people[who].責任額=vals[who];}}});});
+  if(res.ok){m.className='msg ok';m.textContent='✅ 已更新責任額（試算與月報已重算）';renderAll();}
+  else{m.className='msg err';m.textContent='✗ 儲存失敗：'+res.error;}
 }
 
 function renderCustomers(){
@@ -432,7 +457,7 @@ function renderReport(){
     months.forEach(month=>{
       const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&mp.手收a===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額});
       const tr=document.createElement('tr');tr.innerHTML=`<td>${who}</td><td>${month}</td><td class="num">${fmt(mp.手收a)}</td><td class="num">${fmt(b)}</td><td class="num">${fmt(c)}</td><td class="num">${fmt(r.afterTax)}</td><td class="num">${fmt(r.net3)}</td>`;tb.appendChild(tr);
     });
   });
@@ -445,7 +470,7 @@ function renderHist(){
   Object.keys(DB.people).forEach(who=>{const p=DB.people[who];
     months.forEach(month=>{const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&(mp.手收a||0)===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額});
       newTotal+=r.afterTax;});});
   $('ov_old').textContent=fmt(OLD.recTotal);
   $('ov_oldfee').textContent=fmt(OLD.feeTotal);
@@ -463,7 +488,7 @@ function renderAll(){
   fillSelect($('c_month'),allMonths().filter(m=>m>='202608').reverse(),$('c_month').value||'202608');
   fillSelect($('nc_grp'),['夙君客戶','書敏客戶','特別組']);
   fillSelect($('nc_who'),whos);
-  renderCustomers();renderDetail();renderSelfA();renderReport();renderHist();onWhoMonthChange();
+  renderCustomers();renderDetail();renderSelfA();renderReport();renderHist();renderDuty();onWhoMonthChange();
 }
 
 /* ====== 動作 ====== */
@@ -515,6 +540,7 @@ $('c_who').addEventListener('change',onWhoMonthChange);
 $('c_month').addEventListener('change',onWhoMonthChange);
 ['c_a','c_disc','c_def'].forEach(id=>$(id).addEventListener('input',renderCalc));
 $('c_save').addEventListener('click',doSaveMonthParam);
+$('duty_save').addEventListener('click',doSaveDuty);
 $('a_cust').addEventListener('change',onCustChange);
 $('a_submit').addEventListener('click',doAddDetail);
 $('nc_submit').addEventListener('click',doAddCustomer);
