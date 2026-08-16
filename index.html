@@ -116,10 +116,10 @@
       <h2><span class="dot"></span>建議分潤與撥付（稅後）</h2>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px">各種分潤模型下，三方各拿多少（稅後）。可在下方「採用模型」選定一種，① ② ③ 撥付與月報會依此計算。</div>
       <div class="sheet-wrap"><table class="sheet"><thead><tr><th>模型</th><th id="mh_a">自己 a</th><th id="mh_b">經理 b</th><th id="mh_c">外部 c</th></tr></thead><tbody id="model_body"></tbody></table></div>
-      <div style="font-size:11px;color:var(--ink-soft);margin:6px 0 10px">・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・夙君自扛：責任額全由夙君自己 a 吸收，特別組不被抵扣（自己 a 可能為負＝夙君自掏補足）。・綜合：系統原本的折衷建議。</div>
+      <div id="model_note" style="font-size:11px;color:var(--ink-soft);margin:6px 0 10px"></div>
       <div class="field"><label>採用模型（撥付與月報依此）</label><select id="model_sel">
         <option value="auto">綜合（系統原建議）</option>
-        <option value="self">夙君自扛・特別組不抵扣</option>
+        <option value="self" id="opt_self">夙君自扛・特別組不抵扣</option>
         <option value="ratio">比例分攤</option>
         <option value="shapley">Shapley 公平值</option>
         <option value="dutyshared">責任額由 b／c 分攤</option>
@@ -356,7 +356,10 @@ function renderCalc(){
   const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額,model:DB.model});
   $('o_d').textContent=fmt(r.d);$('o_duty').textContent=fmt(r.duty);$('o_total').textContent=fmt(r.total);
   $('o_e').textContent=fmt(r.e);$('o_rate').textContent=pct(r.rate);$('o_aftertax').textContent=fmt(r.afterTax);
-  const MLAB=[['self','夙君自扛（特別組不抵扣）'],['auto','綜合（原建議）'],['ratio','比例分攤'],['shapley','Shapley 公平值'],['dutyshared','責任額由 b／c 分攤']];
+  const selfLab=who+'自扛（特別組不抵扣）';
+  const MLAB=[['self',selfLab],['auto','綜合（原建議）'],['ratio','比例分攤'],['shapley','Shapley 公平值'],['dutyshared','責任額由 b／c 分攤']];
+  $('model_note').textContent='・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・'+who+'自扛：責任額全由'+who+'自己 a 吸收，特別組不被抵扣（自己 a 可能為負＝'+who+'自掏補足）。・綜合：系統原本的折衷建議。';
+  $('opt_self').textContent=who+'自扛・特別組不抵扣';
   const mtb=$('model_body');mtb.innerHTML='';
   MLAB.forEach(([key,lab])=>{const mm=r.models[key]||[0,0,0];const on=(DB.model===key);const tr=document.createElement('tr');if(on)tr.style.cssText='background:var(--plum-tint);font-weight:700';tr.innerHTML=`<td>${on?'✓ ':''}${lab}</td><td class="num">${fmt(mm[0])}</td><td class="num">${fmt(mm[1])}</td><td class="num">${fmt(mm[2])}</td>`;mtb.appendChild(tr);});
   if($('model_sel').value!==DB.model)$('model_sel').value=DB.model;
