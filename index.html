@@ -110,7 +110,7 @@
       <div class="rline"><span class="k">總手收</span><span class="v" id="o_total"></span></div>
       <div class="rline"><span class="k">淨收入 e</span><span class="v" id="o_e"></span></div>
       <div class="rline"><span class="k">落點式比例</span><span class="v"><span class="pill" id="o_rate"></span></span></div>
-      <div class="hl"><div class="cap">總獎金（稅後）</div><div class="amt" id="o_aftertax"></div></div>
+      <div class="hl"><div class="cap">總獎金（稅後·折扣前）</div><div class="amt" id="o_aftertax"></div></div>
     </div>
     <div class="card">
       <h2><span class="dot"></span>建議分潤與撥付（稅後）</h2>
@@ -268,27 +268,30 @@ function bracket(e){if(e<=0)return 0;if(e<=200000)return .35;if(e<=400000)return
 function calc(inp){
   const {salary,months,mult,a,b,c,tax,disc,deferred,duty0,model}=inp;
   const avg=salary*months/12,dCalc=avg*mult,d=(duty0!=null&&duty0!==''&&!isNaN(Number(duty0)))?Number(duty0):dCalc,duty=d+deferred,total=a+b+c,e=total-duty;
-  const rate=bracket(e),pre=Math.max(0,e*rate),afterDisc=pre*(1-disc),afterTax=afterDisc*(1-tax);
+  const rate=bracket(e),base=Math.max(0,e*rate)*(1-tax); // 稅後、未扣折扣的總獎金（分配基準）
   const gap=Math.max(0,duty-a);
   const bN=(b+c)===0?0:Math.max(0,b-gap*b/(b+c)),cN=(b+c)===0?0:Math.max(0,c-gap*c/(b+c));
-  const v=(sa,sb,sc)=>{const s=(sa?a:0)+(sb?b:0)+(sc?c:0),ee=s-duty;return Math.max(0,ee*bracket(ee))*(1-disc)*(1-tax);};
-  const va=v(1,0,0),vb=v(0,1,0),vc=v(0,0,1),vab=v(1,1,0),vac=v(1,0,1),vbc=v(0,1,1),vabc=afterTax;
-  const m1=[total===0?0:afterTax*a/total,total===0?0:afterTax*b/total,total===0?0:afterTax*c/total];
+  const v=(sa,sb,sc)=>{const s=(sa?a:0)+(sb?b:0)+(sc?c:0),ee=s-duty;return Math.max(0,ee*bracket(ee))*(1-tax);};
+  const va=v(1,0,0),vb=v(0,1,0),vc=v(0,0,1),vab=v(1,1,0),vac=v(1,0,1),vbc=v(0,1,1),vabc=base;
+  const m1=[total===0?0:base*a/total,total===0?0:base*b/total,total===0?0:base*c/total];
   const m2=[1/3*va+1/6*(vab-vb)+1/6*(vac-vc)+1/3*(vabc-vbc),1/3*vb+1/6*(vab-va)+1/6*(vbc-vc)+1/3*(vabc-vac),1/3*vc+1/6*(vac-va)+1/6*(vbc-vb)+1/3*(vabc-vab)];
-  const K=rate*(1-disc)*(1-tax);
-  const m3c=cN*K,m3b=bN*K,m3a=Math.max(0,afterTax-m3b-m3c);const M3=[m3a,m3b,m3c];
+  const K=rate*(1-tax);
+  const m3c=cN*K,m3b=bN*K,m3a=Math.max(0,base-m3b-m3c);const M3=[m3a,m3b,m3c];
   // 夙君自扛：責任額全由夙君自己 a 吸收，夙君客戶 b、特別組 c 皆不被抵扣（m4a 可為負＝夙君自掏補足）
-  const m4b=b*K,m4c=c*K,m4a=afterTax-m4b-m4c;const M4=[m4a,m4b,m4c];
+  const m4b=b*K,m4c=c*K,m4a=base-m4b-m4c;const M4=[m4a,m4b,m4c];
   const use3=(a>=duty)&&(b>=a)&&(b>=c);
   const auto=[use3?M3[0]:(m1[0]+m2[0])/2,use3?M3[1]:(m1[1]+m2[1])/2,use3?M3[2]:(m1[2]+m2[2])/2];
   const self4=(a>=duty)?auto.slice():M4.slice();
-  const models={ratio:m1,shapley:m2,dutyshared:M3,self:self4,auto:auto};
-  const rec=(models[model]||auto).slice();
-  const pay1=rec[1]+rec[2],pay2=rec[2],net3=pay1-pay2,aKeep=afterTax-pay1;
+  const raw={ratio:m1,shapley:m2,dutyshared:M3,self:self4,auto:auto};
+  const dA=x=>[x[0]*(1-disc),x[1]*(1-disc),x[2]]; // 折扣只扣夙君自己 a、夙君客戶 b；特別組 c 不扣折扣
+  const models={};for(const k in raw)models[k]=dA(raw[k]);
+  const afterTax=base; // 顯示用：稅後總獎金（折扣前的餅）
+  const rec=(models[model]||models.auto).slice();
+  const pay1=rec[1]+rec[2],pay2=rec[2],net3=pay1-pay2,aKeep=rec[0];
   let advice,warn=false;
-  if(a<duty){warn=true;advice="夙君自己手收未達責任額（缺口 "+fmt(gap)+"）。各模型呈現如下，可依「採用模型」選定。";}
-  else{advice="夙君自己手收已覆蓋責任額。各模型呈現如下，可依「採用模型」選定。";}
-  return {d,dCalc,duty,total,e,rate,afterTax,gap,models,rec,pay1,pay2,net3,aKeep,advice,warn};
+  if(a<duty){warn=true;advice="夙君自己手收未達責任額（缺口 "+fmt(gap)+"）。折扣只扣夙君、特別組不扣。各模型如下，可依「採用模型」選定。";}
+  else{advice="夙君自己手收已覆蓋責任額。折扣只扣夙君、特別組不扣。各模型如下，可依「採用模型」選定。";}
+  return {d,dCalc,duty,total,e,rate,afterTax,base,gap,models,rec,pay1,pay2,net3,aKeep,advice,warn};
 }
 const fmt=n=>{if(!isFinite(n))n=0;return Math.round(n).toLocaleString('en-US');};
 const pct=n=>(n*100).toFixed(0)+'%';
