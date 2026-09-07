@@ -266,19 +266,19 @@ const SEED     = {"gz":[{"n":"梁憶慈","g":"特別組","w":"夙君"},{"n":"方
 /* ====== 計算 ====== */
 function bracket(e){if(e<=0)return 0;if(e<=200000)return .35;if(e<=400000)return .40;if(e<=600000)return .45;return .50;}
 function calc(inp){
-  const {salary,months,mult,a,b,c,tax,disc,deferred,duty0,model}=inp;
+  const {salary,months,mult,a,b,c,tax,disc,deferred,duty0,model,who}=inp;
   const avg=salary*months/12,dCalc=avg*mult,d=(duty0!=null&&duty0!==''&&!isNaN(Number(duty0)))?Number(duty0):dCalc,duty=d+deferred,total=a+b+c,e=total-duty;
   const rate=bracket(e),base=Math.max(0,e*rate)*(1-disc)*(1-tax); // 稅後總獎金（總數都過折扣 0.1）
   const gap=Math.max(0,duty-a);
   const bN=(b+c)===0?0:Math.max(0,b-gap*b/(b+c)),cN=(b+c)===0?0:Math.max(0,c-gap*c/(b+c));
-  const v=(sa,sb,sc)=>{const s=(sa?a:0)+(sb?b:0)+(sc?c:0),ee=s-duty;return Math.max(0,ee*bracket(ee))*(1-tax);};
+  const v=(sa,sb,sc)=>{const s=(sa?a:0)+(sb?b:0)+(sc?c:0),ee=s-duty;return Math.max(0,ee*bracket(ee))*(1-disc)*(1-tax);};
   const va=v(1,0,0),vb=v(0,1,0),vc=v(0,0,1),vab=v(1,1,0),vac=v(1,0,1),vbc=v(0,1,1),vabc=base;
   const m1=[total===0?0:base*a/total,total===0?0:base*b/total,total===0?0:base*c/total];
   const m2=[1/3*va+1/6*(vab-vb)+1/6*(vac-vc)+1/3*(vabc-vbc),1/3*vb+1/6*(vab-va)+1/6*(vbc-vc)+1/3*(vabc-vac),1/3*vc+1/6*(vac-va)+1/6*(vbc-vb)+1/3*(vabc-vab)];
   const K=rate*(1-disc)*(1-tax);
   const m3c=cN*K,m3b=bN*K,m3a=Math.max(0,base-m3b-m3c);const M3=[m3a,m3b,m3c];
   // 夙君自扛：責任額全由夙君自己 a 吸收，夙君託管客戶 b、特別組 c 皆不被抵扣（m4a 可為負＝夙君自掏補足）
-  const m4b=b*K,m4c=c*K,m4a=base-m4b-m4c;const M4=[m4a,m4b,m4c];
+  const _mgr=base-c*K,_ab=a+b;const m4a=_ab>0?_mgr*a/_ab:0,m4b=_ab>0?_mgr*b/_ab:0,m4c=c*K;const M4=[m4a,m4b,m4c];
   const use3=(a>=duty)&&(b>=a)&&(b>=c);
   const auto=[use3?M3[0]:(m1[0]+m2[0])/2,use3?M3[1]:(m1[1]+m2[1])/2,use3?M3[2]:(m1[2]+m2[2])/2];
   const self4=(a>=duty)?auto.slice():M4.slice();
@@ -287,8 +287,9 @@ function calc(inp){
   const rec=(models[model]||models.auto).slice();
   const pay1=rec[1]+rec[2],pay2=rec[2],net3=pay1-pay2,aKeep=rec[0];
   let advice,warn=false;
-  if(a<duty){warn=true;advice="夙君自己手收未達責任額（缺口 "+fmt(gap)+"）。折扣 0.1 已套用於總額。各模型如下，可依「採用模型」選定。";}
-  else{advice="夙君自己手收已覆蓋責任額。折扣 0.1 已套用於總額。各模型如下，可依「採用模型」選定。";}
+  const _nm=(typeof who==='string'&&who)?who:'';const _dt=(disc>0?('折扣 '+disc+' 已套用於總額。'):'');
+  if(a<duty){warn=true;advice=_nm+"自己手收未達責任額（缺口 "+fmt(gap)+"）。"+_dt+"各模型如下，可依「採用模型」選定。";}
+  else{advice=_nm+"自己手收已覆蓋責任額。"+_dt+"各模型如下，可依「採用模型」選定。";}
   return {d,dCalc,duty,total,e,rate,afterTax,base,gap,models,rec,pay1,pay2,net3,aKeep,advice,warn};
 }
 const fmt=n=>{if(!isFinite(n))n=0;return Math.round(n).toLocaleString('en-US');};
@@ -351,12 +352,12 @@ function renderCalc(){
   $('k_pay2').textContent='② '+who+' 轉付 '+p.c組別;
   $('k_net3').textContent='③ '+who+' 淨留存';
   $('o_a').textContent=fmt(a);$('o_b').textContent=fmt(b);$('o_c').textContent=fmt(c);
-  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額,model:DB.model});
+  const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a,b,c,tax:DB.tax,disc,deferred:def,duty0:p.責任額,model:DB.model,who:who});
   $('o_d').textContent=fmt(r.d);$('o_duty').textContent=fmt(r.duty);$('o_total').textContent=fmt(r.total);
   $('o_e').textContent=fmt(r.e);$('o_rate').textContent=pct(r.rate);$('o_aftertax').textContent=fmt(r.afterTax);
   const selfLab=who+'自扛（特別組不抵扣）';
   const MLAB=[['self',selfLab],['auto','綜合（原建議）'],['ratio','比例分攤'],['shapley','Shapley 公平值'],['dutyshared','責任額由 b／c 分攤']];
-  $('model_note').textContent='・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・'+who+'自扛：責任額全由'+who+'自己 a 吸收，特別組不被抵扣（自己 a 可能為負＝'+who+'自掏補足）。・綜合：系統原本的折衷建議。';
+  $('model_note').textContent='・比例：按手收比例分。・Shapley：合作賽局公平值。・責任額由b/c分攤：現行缺口比例分攤。・'+who+'自扛：責任額由'+who+'自己與'+who+'託管客戶一起扛，只有特別組 c 不被抵扣（特別組全額計算）。・綜合：系統原本的折衷建議。';
   $('opt_self').textContent=who+'自扛・特別組不抵扣';
   const mtb=$('model_body');mtb.innerHTML='';
   MLAB.forEach(([key,lab])=>{const mm=r.models[key]||[0,0,0];const on=(DB.model===key);const tr=document.createElement('tr');if(on)tr.style.cssText='background:var(--plum-tint);font-weight:700';tr.innerHTML=`<td>${on?'✓ ':''}${lab}</td><td class="num">${fmt(mm[0])}</td><td class="num">${fmt(mm[1])}</td><td class="num">${fmt(mm[2])}</td>`;mtb.appendChild(tr);});
@@ -518,7 +519,7 @@ function renderReport(){
     months.forEach(month=>{
       const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&mp.手收a===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model,who:who});
       const tr=document.createElement('tr');tr.innerHTML=`<td>${who}</td><td>${month}</td><td class="num">${fmt(mp.手收a)}</td><td class="num">${fmt(b)}</td><td class="num">${fmt(c)}</td><td class="num">${fmt(r.afterTax)}</td><td class="num">${fmt(r.net3)}</td>`;tb.appendChild(tr);
     });
   });
@@ -531,7 +532,7 @@ function renderHist(){
   Object.keys(DB.people).forEach(who=>{const p=DB.people[who];
     months.forEach(month=>{const b=agg(month,p.b組別,who),c=agg(month,p.c組別,who);const mp=monthParam(who,month);
       if(b===0&&c===0&&(mp.手收a||0)===0)return;
-      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model});
+      const r=calc({salary:p.月薪,months:p.月數,mult:p.倍數,a:mp.手收a,b,c,tax:DB.tax,disc:mp.折扣,deferred:mp.遞延,duty0:p.責任額,model:DB.model,who:who});
       newTotal+=r.afterTax;});});
   $('ov_old').textContent=fmt(OLD.recTotal);
   $('ov_oldfee').textContent=fmt(OLD.feeTotal);
