@@ -133,11 +133,14 @@
       <div class="rline"><span class="k" id="k_net3">③ 經理淨留存</span><span class="v" id="o_net3"></span></div>
       <div class="msg" id="advice" style="display:block"></div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn" id="sendBtnPlain" style="flex:1;font-size:14px">傳送（不含算式）</button>
-      <button class="btn ghost" id="sendBtnCalc" style="flex:1;font-size:14px">傳送（含算式）</button>
+    <div class="field" style="margin-top:4px"><label>傳送模型（理專比較後挑一種；僅影響下方傳送，不改月報採用模型）</label>
+      <select id="send_model"></select></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" id="sendBtnPlain" style="flex:1;font-size:13.5px">傳送（不含算式）</button>
+      <button class="btn ghost" id="sendBtnCalc" style="flex:1;font-size:13.5px">傳送（含算式）</button>
     </div>
-    <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;text-align:center;line-height:1.5">不含算式：給特別組／客戶看最終分配；含算式：給理專看完整推算。<br>在 LINE 內開啟會直接送到聊天室，否則複製到剪貼簿可自行貼上。</div>
+    <button class="btn ghost" id="sendBtnCompare" style="margin-top:8px;font-size:13.5px">傳送各模型比較（一次看全部）</button>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;text-align:center;line-height:1.5">不含算式：給特別組／客戶看最終分配；含算式：給理專看完整推算；各模型比較：一則訊息列出全部模型供理專比較。<br>在 LINE 內開啟會直接送到聊天室，否則複製到剪貼簿可自行貼上。</div>
   </div>
 
   <!-- 新增手收 -->
@@ -366,12 +369,13 @@ function renderCalc(){
   const mtb=$('model_body');mtb.innerHTML='';
   MLAB.forEach(([key,lab])=>{const mm=r.models[key]||[0,0,0];const on=(DB.model===key);const tr=document.createElement('tr');if(on)tr.style.cssText='background:var(--plum-tint);font-weight:700';tr.innerHTML=`<td>${on?'✓ ':''}${lab}</td><td class="num">${fmt(mm[0])}</td><td class="num">${fmt(mm[1])}</td><td class="num">${fmt(mm[2])}</td>`;mtb.appendChild(tr);});
   if($('model_sel').value!==DB.model)$('model_sel').value=DB.model;
+  const _sm=$('send_model');const _prevSM=_sm.value;fillSelect(_sm,MLAB.map(([v,t])=>({v,t})),(_prevSM&&r.models[_prevSM])?_prevSM:DB.model);
   const tot=r.rec[0]+r.rec[1]+r.rec[2];const bar=$('bar');bar.innerHTML='';
   [['seg-a',r.rec[0]],['seg-b',r.rec[1]],['seg-c',r.rec[2]]].forEach(([cls,val])=>{const w=tot>0?val/tot*100:0;const s=document.createElement('span');s.className=cls;s.style.width=w+'%';if(w>12)s.textContent=Math.round(w)+'%';bar.appendChild(s);});
   $('o_recb').textContent=fmt(r.rec[1]);$('o_recc').textContent=fmt(r.rec[2]);
   $('o_pay1').textContent=fmt(r.pay1);$('o_pay2').textContent=fmt(r.pay2);$('o_net3').textContent=fmt(r.net3);
   const adv=$('advice');adv.className='msg '+(r.warn?'err':'ok');adv.textContent=r.advice;
-  window.__last={who,month,a,b,c,r,bLab:p.b組別,cLab:p.c組別,disc,tax:DB.tax,modelLab:((MLAB.find(x=>x[0]===DB.model)||['',DB.model])[1])};
+  window.__last={who,month,a,b,c,r,bLab:p.b組別,cLab:p.c組別,disc,tax:DB.tax,model:DB.model,modelLabels:Object.fromEntries(MLAB),modelLab:((MLAB.find(x=>x[0]===DB.model)||['',DB.model])[1])};
 }
 function onWhoMonthChange(){
   const who=$('c_who').value, month=$('c_month').value;const mp=monthParam(who,month);
@@ -637,7 +641,10 @@ $('sa_del').addEventListener('click',delSelfA);
 $('df_submit').addEventListener('click',doAddDefer);
 
 /* ====== 傳送訊息 ====== */
-function buildMessagePlain(){const L=window.__last;if(!L)return'';const r=L.r;
+function _pay(rec){const pay1=rec[1]+rec[2],pay2=rec[2];return {pay1,pay2,net3:pay1-pay2};}
+function _mk(L,mk){mk=mk||L.model;const rec=(L.r.models[mk]||L.r.rec);const lab=(L.modelLabels&&L.modelLabels[mk])||L.modelLab;return {rec,lab,p:_pay(rec)};}
+function getSendModel(){const s=$('send_model');return (s&&s.value)||(window.__last&&window.__last.model)||'auto';}
+function buildMessagePlain(mk){const L=window.__last;if(!L)return'';const r=L.r;const M=_mk(L,mk);
   return [
     `📊 獎金分潤試算`,
     `${L.who}　${L.month}`,
@@ -645,16 +652,16 @@ function buildMessagePlain(){const L=window.__last;if(!L)return'';const r=L.r;
     `總手收　${fmt(r.total)}（落點 ${pct(r.rate)}）`,
     `稅後總獎金　${fmt(r.afterTax)}`,
     ``,
-    `分配　採用模型：${L.modelLab}`,
-    `・${L.who}自己　${fmt(r.rec[0])}`,
-    `・${L.bLab}　${fmt(r.rec[1])}`,
-    `・${L.cLab}　${fmt(r.rec[2])}`,
+    `分配　採用模型：${M.lab}`,
+    `・${L.who}自己　${fmt(M.rec[0])}`,
+    `・${L.bLab}　${fmt(M.rec[1])}`,
+    `・${L.cLab}　${fmt(M.rec[2])}`,
     ``,
-    `① 撥給${L.who}（含代轉${L.cLab}）　${fmt(r.pay1)}`,
-    `② ${L.who}轉付${L.cLab}　${fmt(r.pay2)}`,
-    `③ ${L.who}淨留存　${fmt(r.net3)}`
+    `① 撥給${L.who}（含代轉${L.cLab}）　${fmt(M.p.pay1)}`,
+    `② ${L.who}轉付${L.cLab}　${fmt(M.p.pay2)}`,
+    `③ ${L.who}淨留存　${fmt(M.p.net3)}`
   ].join('\n');}
-function buildMessageCalc(){const L=window.__last;if(!L)return'';const r=L.r;
+function buildMessageCalc(mk){const L=window.__last;if(!L)return'';const r=L.r;const M=_mk(L,mk);
   const deferred=Math.max(0,r.duty-r.d);
   const dutyLine=deferred>0?`責任額　${fmt(r.d)} ＋ 遞延 ${fmt(deferred)} ＝ ${fmt(r.duty)}`:`責任額　${fmt(r.duty)}`;
   const taxExpr=`淨業績 × ${pct(r.rate)}`+(L.disc>0?` × (1−折扣${pct(L.disc)})`:'')+` × (1−稅${pct(L.tax)})`;
@@ -676,16 +683,33 @@ function buildMessageCalc(){const L=window.__last;if(!L)return'';const r=L.r;
     `　稅後總獎金 ＝ ${taxExpr}`,
     `　　＝ ${fmt(r.afterTax)}`,
     ``,
-    `〔分配：${L.modelLab}〕`,
-    `　${L.who}自己　${fmt(r.rec[0])}`,
-    `　${L.bLab}　${fmt(r.rec[1])}`,
-    `　${L.cLab}　${fmt(r.rec[2])}`,
+    `〔分配：${M.lab}〕`,
+    `　${L.who}自己　${fmt(M.rec[0])}`,
+    `　${L.bLab}　${fmt(M.rec[1])}`,
+    `　${L.cLab}　${fmt(M.rec[2])}`,
     ``,
     `〔撥付〕`,
-    `　① 撥給${L.who}（含代轉${L.cLab}）　${fmt(r.pay1)}`,
-    `　② ${L.who}轉付${L.cLab}　${fmt(r.pay2)}`,
-    `　③ ${L.who}淨留存　${fmt(r.net3)}`
+    `　① 撥給${L.who}（含代轉${L.cLab}）　${fmt(M.p.pay1)}`,
+    `　② ${L.who}轉付${L.cLab}　${fmt(M.p.pay2)}`,
+    `　③ ${L.who}淨留存　${fmt(M.p.net3)}`
   ].join('\n');}
+function buildMessageCompare(){const L=window.__last;if(!L)return'';const r=L.r;
+  const order=['self','auto','ratio','shapley','dutyshared'];
+  const out=[
+    `📊 獎金分潤試算 · 各模型比較`,
+    `${L.who}　${L.month}`,
+    `總手收 ${fmt(r.total)}（落點 ${pct(r.rate)}）／稅後總獎金 ${fmt(r.afterTax)}`,
+    `────────────`,
+    `每列：${L.who}自己／${L.bLab}／${L.cLab}`,
+    ``
+  ];
+  order.forEach(mk=>{const rec=r.models[mk];if(!rec)return;const lab=(L.modelLabels&&L.modelLabels[mk])||mk;const star=(mk===L.model)?'★ ':'';
+    out.push(`${star}${lab}`);
+    out.push(`　${fmt(rec[0])}／${fmt(rec[1])}／${fmt(rec[2])}`);
+  });
+  out.push('');
+  out.push('★＝月報目前採用；要送單一模型請用上方兩顆按鈕。');
+  return out.join('\n');}
 let inClient=false;
 async function sendResult(msg){
   if(!msg){$('status').textContent='請先在「試算」選擇掛單人與月份';return;}
@@ -696,8 +720,9 @@ async function sendResult(msg){
     try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿（可貼到聊天室）';}catch(e){alert(msg);}
   }
 }
-$('sendBtnPlain').addEventListener('click',()=>sendResult(buildMessagePlain()));
-$('sendBtnCalc').addEventListener('click',()=>sendResult(buildMessageCalc()));
+$('sendBtnPlain').addEventListener('click',()=>sendResult(buildMessagePlain(getSendModel())));
+$('sendBtnCalc').addEventListener('click',()=>sendResult(buildMessageCalc(getSendModel())));
+$('sendBtnCompare').addEventListener('click',()=>sendResult(buildMessageCompare()));
 
 /* ====== 啟動 ====== */
 async function init(){
