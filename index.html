@@ -135,6 +135,7 @@
     </div>
     <div class="field" style="margin-top:4px"><label>傳送模型（理專比較後挑一種；僅影響下方傳送，不改月報採用模型）</label>
       <select id="send_model"></select></div>
+    <label style="display:flex;align-items:center;gap:9px;margin-top:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--plum-tint);border:1px solid var(--plum);border-radius:10px"><input type="checkbox" id="send_detail" checked style="width:18px;height:18px;padding:0;margin:0;flex:none;accent-color:var(--plum)"><span>附上<b>特別組手收明細</b>（每位客戶一行，含遞延到該月的款項）</span></label>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn" id="sendBtnPlain" style="flex:1;font-size:13.5px">傳送（不含算式）</button>
       <button class="btn ghost" id="sendBtnCalc" style="flex:1;font-size:13.5px">傳送（含算式）</button>
@@ -658,8 +659,25 @@ $('df_submit').addEventListener('click',doAddDefer);
 function _pay(rec){const pay1=rec[1]+rec[2],pay2=rec[2];return {pay1,pay2,net3:pay1-pay2};}
 function _mk(L,mk){mk=mk||L.model;const rec=(L.r.models[mk]||L.r.rec);const lab=(L.modelLabels&&L.modelLabels[mk])||L.modelLab;return {rec,lab,p:_pay(rec)};}
 function getSendModel(){const s=$('send_model');return (s&&s.value)||(window.__last&&window.__last.model)||'auto';}
+function wantDetail(){const c=$('send_detail');return !!(c&&c.checked);}
+/* 特別組手收明細：該月、該掛單人、組別＝特別組的每一筆（含遞延到該月的款項，另行標示） */
+function buildDetailSection(L){
+  const rows=DB.md.filter(m=>String(m.月份)===String(L.month)&&m.組別===L.cLab&&m.掛單人===L.who);
+  const out=[`〔${L.cLab}手收明細 · ${L.month}〕`];
+  if(!rows.length){out.push(`　（本月無${L.cLab}手收）`);return out;}
+  const reg=rows.filter(m=>!isDefer(m)),dfr=rows.filter(isDefer);
+  reg.forEach(m=>out.push(`　${m.姓名}　${fmt(m.手收)}`));
+  if(dfr.length){
+    if(reg.length)out.push(`　— 遞延到本月 —`);
+    dfr.forEach(m=>{const nm=String(m.姓名).replace(/^特別組遞延[·・]?/,'')||'遞延給付';out.push(`　遞延｜${nm}　${fmt(m.手收)}`);});
+  }
+  const sum=rows.reduce((s,m)=>s+(Number(m.手收)||0),0);
+  out.push(`　合計　${fmt(sum)}（＝${L.cLab} c）`);
+  return out;
+}
+function _withDetail(arr,L,where){ if(!wantDetail())return arr.join('\n'); const sec=buildDetailSection(L); if(where==='end'){return arr.concat(['']).concat(sec).join('\n');} return arr.join('\n'); }
 function buildMessagePlain(mk){const L=window.__last;if(!L)return'';const r=L.r;const M=_mk(L,mk);
-  return [
+  return _withDetail([
     `📊 獎金分潤試算`,
     `${L.who}　${L.month}`,
     `────────────`,
@@ -674,12 +692,12 @@ function buildMessagePlain(mk){const L=window.__last;if(!L)return'';const r=L.r;
     `① 撥給${L.who}（含代轉${L.cLab}）　${fmt(M.p.pay1)}`,
     `② ${L.who}轉付${L.cLab}　${fmt(M.p.pay2)}`,
     `③ ${L.who}淨留存　${fmt(M.p.net3)}`
-  ].join('\n');}
+  ],L,'end');}
 function buildMessageCalc(mk){const L=window.__last;if(!L)return'';const r=L.r;const M=_mk(L,mk);
   const deferred=Math.max(0,r.duty-r.d);
   const dutyLine=deferred>0?`責任額　${fmt(r.d)} ＋ 遞延 ${fmt(deferred)} ＝ ${fmt(r.duty)}`:`責任額　${fmt(r.duty)}`;
   const taxExpr=`淨業績 × ${pct(r.rate)}`+(L.disc>0?` × (1−折扣${pct(L.disc)})`:'')+` × (1−稅${pct(L.tax)})`;
-  return [
+  const head=[
     `📊 獎金分潤試算（含算式）`,
     `${L.who}　${L.month}`,
     `────────────`,
@@ -687,7 +705,10 @@ function buildMessageCalc(mk){const L=window.__last;if(!L)return'';const r=L.r;c
     `　${L.who}自己　${fmt(L.a)}`,
     `　${L.bLab}　${fmt(L.b)}`,
     `　${L.cLab}　${fmt(L.c)}`,
-    `　總手收　${fmt(r.total)}`,
+    `　總手收　${fmt(r.total)}`
+  ];
+  const detail=wantDetail()?[''].concat(buildDetailSection(L)):[];
+  return head.concat(detail).concat([
     ``,
     `〔計算〕`,
     `　${dutyLine}`,
@@ -706,7 +727,7 @@ function buildMessageCalc(mk){const L=window.__last;if(!L)return'';const r=L.r;c
     `　① 撥給${L.who}（含代轉${L.cLab}）　${fmt(M.p.pay1)}`,
     `　② ${L.who}轉付${L.cLab}　${fmt(M.p.pay2)}`,
     `　③ ${L.who}淨留存　${fmt(M.p.net3)}`
-  ].join('\n');}
+  ]).join('\n');}
 function buildMessageCompare(){const L=window.__last;if(!L)return'';const r=L.r;
   const order=['self','auto','ratio','shapley','dutyshared'];
   const out=[
@@ -723,6 +744,7 @@ function buildMessageCompare(){const L=window.__last;if(!L)return'';const r=L.r;
   });
   out.push('');
   out.push('★＝月報目前採用；要送單一模型請用上方兩顆按鈕。');
+  if(wantDetail()){out.push('');buildDetailSection(L).forEach(x=>out.push(x));}
   return out.join('\n');}
 let inClient=false;
 /* 結果視窗：任何環境都保證看得到、可複製 */
