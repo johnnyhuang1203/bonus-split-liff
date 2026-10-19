@@ -91,11 +91,13 @@
       <div class="msg" id="c_msg" style="display:none"></div>
     </div>
     <div class="card">
-      <h2><span class="dot"></span>責任額設定 <span style="font-size:11.5px;font-weight:400;color:var(--ink-soft)">（可自訂，套用到試算與月報）</span></h2>
-      <div id="duty_rows"></div>
-      <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px">預設＝月薪 × 年薪月數 ÷ 12 × 倍數。填「自訂責任額」可直接覆寫；留空或按「還原預設」則用公式。</div>
-      <button class="btn ghost" id="duty_save">儲存責任額</button>
-      <div class="msg" id="duty_msg" style="display:none"></div>
+      <h2 id="duty_toggle" style="cursor:pointer;user-select:none;margin:0"><span class="dot"></span>責任額設定 <span style="font-size:11.5px;font-weight:400;color:var(--ink-soft)">（平常不用動，點此展開）</span><span id="duty_arrow" style="margin-left:auto;color:var(--ink-soft);font-size:16px">▸</span></h2>
+      <div id="duty_body" style="display:none;margin-top:12px">
+        <div id="duty_rows"></div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px">預設＝月薪 × 年薪月數 ÷ 12 × 倍數。填「自訂責任額」可直接覆寫；留空或按「還原預設」則用公式。</div>
+        <button class="btn ghost" id="duty_save">儲存責任額</button>
+        <div class="msg" id="duty_msg" style="display:none"></div>
+      </div>
     </div>
     <div class="card">
       <h2><span class="dot"></span>本月手收（自動帶入）</h2>
@@ -331,6 +333,7 @@ function loadData(s){
 function agg(month,grp,who){return DB.md.filter(m=>m.月份===month&&m.組別===grp&&m.掛單人===who).reduce((s,m)=>s+m.手收,0);}
 function monthParam(who,month){return DB.monthParams.find(p=>p.掛單人===who&&p.月份===month)||{手收a:0,折扣:(who==='夙君'?0.1:0),遞延:0};}
 function allMonths(){return [...new Set(DB.md.map(m=>m.月份))].sort();}
+function curYM(){const d=new Date();return String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0');}
 
 /* ====== 雲端存取（免授權 Firebase RTDB） ====== */
 async function refresh(){
@@ -403,7 +406,7 @@ function renderDuty(){
     const p=DB.people[who];const calcD=Math.round(p.月薪*p.月數/12*p.倍數);
     const ov=(p.責任額!=null&&p.責任額!=='')?p.責任額:'';
     const row=document.createElement('div');row.className='field';
-    row.innerHTML=`<label>${who}（預設 ${fmt(calcD)}）</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="numeric" id="duty_${who}" placeholder="預設 ${fmt(calcD)}" value="${ov}" style="flex:1"><button type="button" class="btn ghost duty-reset" data-w="${who}" style="padding:6px 10px;white-space:nowrap">還原預設</button></div>`;
+    row.innerHTML=`<label>${who}（預設 ${fmt(calcD)}）</label><div style="display:flex;gap:8px;align-items:center;width:100%"><input type="number" inputmode="numeric" id="duty_${who}" placeholder="自訂責任額（留空用預設）" value="${ov}" style="flex:1 1 0;min-width:0;width:auto"><button type="button" class="btn ghost duty-reset" data-w="${who}" style="flex:none;width:auto;padding:9px 12px;white-space:nowrap;font-size:13px">還原預設</button></div>`;
     box.appendChild(row);
   });
   box.querySelectorAll('.duty-reset').forEach(b=>b.onclick=()=>{const el=$('duty_'+b.dataset.w);if(el)el.value='';});
@@ -586,7 +589,8 @@ function renderHist(){
 function renderAll(){
   const whos=Object.keys(DB.people);
   fillSelect($('c_who'),whos,$('c_who').value||whos[0]);
-  fillSelect($('c_month'),allMonths().filter(m=>m>='202608').reverse(),$('c_month').value||'202608');
+  const _cur=curYM();const _ms=[...new Set(allMonths().filter(m=>m>='202608').concat([_cur]))].sort().reverse();
+  fillSelect($('c_month'),_ms,($('c_month').value&&_ms.includes($('c_month').value))?$('c_month').value:_cur);
   fillSelect($('nc_grp'),['夙君託管客戶','書敏託管客戶','特別組']);
   fillSelect($('nc_who'),whos);
   renderCustomers();renderDetail();renderSelfA();renderDefer();renderReport();renderHist();renderDuty();onWhoMonthChange();
@@ -642,6 +646,7 @@ $('c_month').addEventListener('change',onWhoMonthChange);
 ['c_a','c_disc','c_def'].forEach(id=>$(id).addEventListener('input',renderCalc));
 $('c_save').addEventListener('click',doSaveMonthParam);
 $('duty_save').addEventListener('click',doSaveDuty);
+$('duty_toggle').addEventListener('click',()=>{const b=$('duty_body');const open=(b.style.display==='none');b.style.display=open?'block':'none';$('duty_arrow').textContent=open?'▾':'▸';});
 $('model_sel').addEventListener('change',async()=>{const val=$('model_sel').value;DB.model=val;renderCalc();const res=await writeBlob(d=>{d.model=val;});if(res.ok){renderAll();}else{renderReport();}});
 $('a_cust').addEventListener('change',onCustChange);
 $('a_submit').addEventListener('click',doAddDetail);
