@@ -176,8 +176,8 @@
       <div class="field"><label>備註（可留空）</label><input type="text" id="df_note"></div>
       <button class="btn" id="df_submit">新增遞延給付</button>
       <div class="msg" id="df_msg" style="display:none"></div>
-      <div style="font-size:11px;color:var(--ink-soft);margin:8px 0 4px">要修改或刪除，請到「明細」找同月份的「特別組遞延…」那筆。</div>
-      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>項目</th><th>給付月份</th><th>金額</th></tr></thead><tbody id="defer_body"></tbody></table></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin:8px 0 4px">要修改金額請到「明細」；刪除可直接點右側 🗑（需按兩下確認）。</div>
+      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>項目</th><th>給付月份</th><th>金額</th><th>刪除</th></tr></thead><tbody id="defer_body"></tbody></table></div>
     </div>
     <div class="card">
       <h2><span class="dot"></span>找不到客戶？新增客戶</h2>
@@ -195,8 +195,8 @@
   <!-- 客戶 -->
   <div class="page" id="p-cust">
     <div class="card">
-      <h2><span class="dot"></span>客戶歸屬對照 <span class="chip" id="cust_count"></span></h2>
-      <div class="sheet-wrap"><table class="sheet"><thead><tr><th>姓名</th><th>組別</th><th>掛單人</th></tr></thead><tbody id="cust_body"></tbody></table></div>
+      <h2><span class="dot"></span>客戶手收・貢獻度 <span class="chip" id="cust_count"></span></h2>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px">依累積手收由高到低排序；貢獻度＝該客戶占全部客戶手收的比例。</div><div class="sheet-wrap"><table class="sheet"><thead><tr><th>姓名</th><th>組別</th><th>掛單人</th><th>累積手收</th><th>貢獻度</th></tr></thead><tbody id="cust_body"></tbody></table></div>
     </div>
   </div>
 
@@ -396,7 +396,11 @@ async function doSaveDuty(){
 function renderCustomers(){
   $('cust_count').textContent=DB.gz.length+' 位';
   const tb=$('cust_body');tb.innerHTML='';
-  DB.gz.forEach(c=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${c.姓名}</td><td>${c.組別}</td><td>${c.掛單人}</td>`;tb.appendChild(tr);});
+  const rows=DB.gz.map(c=>{const sum=DB.md.filter(m=>m.姓名===c.姓名).reduce((s,m)=>s+(Number(m.手收)||0),0);return {c,sum};});
+  const totCust=rows.reduce((s,r)=>s+r.sum,0)||1;
+  rows.sort((x,y)=>y.sum-x.sum);
+  rows.forEach(({c,sum})=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${c.姓名}</td><td>${c.組別}</td><td>${c.掛單人}</td><td class="num">${fmt(sum)}</td><td class="num">${(sum/totCust*100).toFixed(1)}%</td>`;tb.appendChild(tr);});
+  const trT=document.createElement('tr');trT.style.cssText='font-weight:700;background:rgba(124,144,112,.08)';trT.innerHTML=`<td>合計</td><td></td><td></td><td class="num">${fmt(totCust)}</td><td class="num">100%</td>`;tb.appendChild(trT);
   // customer dropdown for add-手收
   const selfOpts=Object.keys(DB.people).map(w=>({v:'__A_'+w+'__',t:w+'（累加到自己手收 a）'}));
   fillSelect($('a_cust'),selfOpts.concat(DB.gz.map(c=>({v:c.姓名,t:c.姓名+'（'+c.組別+'）'}))));
@@ -498,8 +502,20 @@ function renderDefer(){
   const cc=$('defer_count'); if(cc)cc.textContent=list.length+' 筆';
   const ds=$('defer_sum'); if(ds)ds.textContent=fmt(sum);
   const tb=$('defer_body'); if(!tb)return; tb.innerHTML='';
-  if(!list.length){tb.innerHTML='<tr><td colspan="3" style="color:var(--ink-soft)">尚無遞延給付紀錄</td></tr>';return;}
-  list.slice().reverse().forEach(m=>{tb.insertAdjacentHTML('beforeend',`<tr><td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td></tr>`);});
+  if(!list.length){tb.innerHTML='<tr><td colspan="4" style="color:var(--ink-soft)">尚無遞延給付紀錄</td></tr>';return;}
+  list.slice().reverse().forEach(m=>{tb.insertAdjacentHTML('beforeend',`<tr><td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td><button type="button" class="df-del" data-n="${m.姓名}" data-m="${m.月份}" data-f="${m.手收}" data-arm="0" style="padding:3px 9px;border:1px solid var(--warn);color:var(--warn);background:var(--card);border-radius:7px;cursor:pointer;font-size:13px">🗑</button></td>`);});
+  tb.querySelectorAll('.df-del').forEach(b=>b.onclick=()=>delDefer(b));
+}
+function delDefer(btn){
+  const n=btn.dataset.n,mo=btn.dataset.m,f=Number(btn.dataset.f);
+  if(btn.dataset.arm!=='1'){btn.dataset.arm='1';btn.textContent='確定刪？';setTimeout(()=>{if(btn.dataset.arm==='1'){btn.dataset.arm='0';btn.textContent='🗑';}},4000);return;}
+  btn.dataset.arm='0';btn.textContent='…';
+  const msg=$('df_msg');
+  writeBlob(d=>{d.md=d.md||[];const i=d.md.findIndex(x=>x.n===n&&String(x.m)===String(mo)&&Number(x.f)===f&&x.g==='特別組'&&String(x.n).indexOf('特別組遞延')===0);if(i>=0)d.md.splice(i,1);}).then(res=>{
+    msg.style.display='block';
+    if(res.ok){msg.className='msg ok';msg.textContent='✅ 已刪除遞延：'+n+' '+mo+' '+fmt(f);renderAll();}
+    else{msg.className='msg err';msg.textContent='✗ 刪除失敗：'+res.error;}
+  });
 }
 async function doAddDefer(){
   const month=$('df_month').value.trim(),fee=parseFloat($('df_fee').value)||0,note=$('df_note').value.trim();
