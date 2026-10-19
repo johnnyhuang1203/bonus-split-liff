@@ -177,12 +177,13 @@
       </div>
     </div>
     <div class="card">
-      <h2><span class="dot"></span>特別組遞延給付 <span class="chip" id="defer_count"></span></h2>
-      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px">記錄延後給付給特別組的款項；填「給付月份」後會自動併入該月特別組 c 手收一起試算。特別組遞延累計：<b id="defer_sum" style="color:var(--plum)">0</b></div>
+      <h2><span class="dot"></span>遞延給付 <span class="chip" id="defer_count"></span></h2>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px">記錄延後給付給特別組的款項；填「給付月份」後會自動併入該理專該月的特別組 c 手收一起試算。遞延累計：<b id="defer_sum" style="color:var(--plum)">0</b></div>
       <div class="grid2">
+        <div class="field"><label>理專（掛單人）</label><select id="df_who"></select></div>
         <div class="field"><label>給付月份 <span class="hint">如 202610</span></label><input type="text" id="df_month" inputmode="numeric"></div>
-        <div class="field"><label>金額（元）</label><input type="number" id="df_fee" inputmode="numeric"></div>
       </div>
+      <div class="field"><label>金額（元）</label><input type="number" id="df_fee" inputmode="numeric"></div>
       <div class="field"><label>備註（可留空）</label><input type="text" id="df_note"></div>
       <button class="btn" id="df_submit">新增遞延給付</button>
       <div class="msg" id="df_msg" style="display:none"></div>
@@ -541,36 +542,45 @@ function delSelfA(){
     else{em.className='msg err';em.textContent='✗ 刪除失敗：'+res.error;}
   });
 }
-function isDefer(m){return m.組別==='特別組'&&String(m.姓名).indexOf('特別組遞延')===0;}
+const DEFER_PREFIX=/^(特別組遞延|遞延給付)/;
+function isDefer(m){return m.組別==='特別組'&&DEFER_PREFIX.test(String(m.姓名));}
+function deferLabel(name){return String(name).replace(/^特別組遞延/,'遞延給付');}   // 顯示用：舊資料也顯示成「遞延給付」
 function renderDefer(){
   const list=DB.md.filter(isDefer);
-  const sum=list.reduce((s,m)=>s+(Number(m.手收)||0),0);
   const cc=$('defer_count'); if(cc)cc.textContent=list.length+' 筆';
-  const ds=$('defer_sum'); if(ds)ds.textContent=fmt(sum);
+  const whos=Object.keys(DB.people);
+  const ds=$('defer_sum'); if(ds)ds.textContent=whos.map(w=>w+' '+fmt(list.filter(m=>m.掛單人===w).reduce((s,m)=>s+(Number(m.手收)||0),0))).join('　／　');
+  const dw=$('df_who'); if(dw){const prev=dw.value;fillSelect(dw,whos,(prev&&whos.includes(prev))?prev:whos[0]);}
   const tb=$('defer_body'); if(!tb)return; tb.innerHTML='';
   if(!list.length){tb.innerHTML='<tr><td colspan="4" style="color:var(--ink-soft)">尚無遞延給付紀錄</td></tr>';return;}
-  list.slice().reverse().forEach(m=>{tb.insertAdjacentHTML('beforeend',`<tr><td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td><button type="button" class="df-del" data-n="${m.姓名}" data-m="${m.月份}" data-f="${m.手收}" data-arm="0" style="padding:3px 9px;border:1px solid var(--warn);color:var(--warn);background:var(--card);border-radius:7px;cursor:pointer;font-size:13px">🗑</button></td>`);});
+  whos.forEach(w=>{
+    const grp=list.filter(m=>m.掛單人===w); if(!grp.length)return;
+    const sum=grp.reduce((s,m)=>s+(Number(m.手收)||0),0);
+    tb.insertAdjacentHTML('beforeend',`<tr><td colspan="4" style="background:var(--plum-tint);color:var(--plum);font-weight:700;padding:8px 10px">👤 ${w}　<span style="font-weight:400;color:var(--ink-soft)">${grp.length} 筆・合計 ${fmt(sum)}</span></td></tr>`);
+    grp.slice().reverse().forEach(m=>{tb.insertAdjacentHTML('beforeend',`<tr><td>${deferLabel(m.姓名)}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td><button type="button" class="df-del" data-n="${m.姓名}" data-m="${m.月份}" data-f="${m.手收}" data-w="${m.掛單人}" data-arm="0" style="padding:3px 9px;border:1px solid var(--warn);color:var(--warn);background:var(--card);border-radius:7px;cursor:pointer;font-size:13px">🗑</button></td>`);});
+  });
   tb.querySelectorAll('.df-del').forEach(b=>b.onclick=()=>delDefer(b));
 }
 function delDefer(btn){
-  const n=btn.dataset.n,mo=btn.dataset.m,f=Number(btn.dataset.f);
+  const n=btn.dataset.n,mo=btn.dataset.m,f=Number(btn.dataset.f),wv=btn.dataset.w;
   if(btn.dataset.arm!=='1'){btn.dataset.arm='1';btn.textContent='確定刪？';setTimeout(()=>{if(btn.dataset.arm==='1'){btn.dataset.arm='0';btn.textContent='🗑';}},4000);return;}
   btn.dataset.arm='0';btn.textContent='…';
   const msg=$('df_msg');
-  writeBlob(d=>{d.md=d.md||[];const i=d.md.findIndex(x=>x.n===n&&String(x.m)===String(mo)&&Number(x.f)===f&&x.g==='特別組'&&String(x.n).indexOf('特別組遞延')===0);if(i>=0)d.md.splice(i,1);}).then(res=>{
+  writeBlob(d=>{d.md=d.md||[];const i=d.md.findIndex(x=>x.n===n&&String(x.m)===String(mo)&&Number(x.f)===f&&x.g==='特別組'&&(!wv||x.w===wv)&&DEFER_PREFIX.test(String(x.n)));if(i>=0)d.md.splice(i,1);}).then(res=>{
     msg.style.display='block';
-    if(res.ok){msg.className='msg ok';msg.textContent='✅ 已刪除遞延：'+n+' '+mo+' '+fmt(f);renderAll();}
+    if(res.ok){msg.className='msg ok';msg.textContent='✅ 已刪除遞延：'+deferLabel(n)+' '+mo+' '+fmt(f)+'（'+(wv||'')+'）';renderAll();}
     else{msg.className='msg err';msg.textContent='✗ 刪除失敗：'+res.error;}
   });
 }
 async function doAddDefer(){
-  const month=$('df_month').value.trim(),fee=parseFloat($('df_fee').value)||0,note=$('df_note').value.trim();
+  const who=$('df_who').value,month=$('df_month').value.trim(),fee=parseFloat($('df_fee').value)||0,note=$('df_note').value.trim();
   const m=$('df_msg');m.style.display='block';
+  if(!who){m.className='msg err';m.textContent='請選擇理專（掛單人）';return;}
   if(!month||!fee){m.className='msg err';m.textContent='請填給付月份與金額';return;}
   m.className='msg';m.textContent='寫入中…';
-  const nm='特別組遞延'+(note?'·'+note:'');
-  const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:nm,m:month,f:fee,g:'特別組',w:'夙君'});});
-  if(res.ok){m.className='msg ok';m.textContent='✅ 已新增特別組遞延給付：'+month+' ＋'+fmt(fee)+'（已併入該月特別組 c）';$('df_fee').value='';$('df_note').value='';renderAll();}
+  const nm='遞延給付'+(note?'·'+note:'');
+  const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:nm,m:month,f:fee,g:'特別組',w:who});});
+  if(res.ok){m.className='msg ok';m.textContent='✅ 已新增 '+who+' 的遞延給付：'+month+' ＋'+fmt(fee)+'（已併入 '+who+' 該月特別組 c）';$('df_fee').value='';$('df_note').value='';renderAll();}
   else{m.className='msg err';m.textContent='✗ 寫入失敗：'+res.error;}
 }
 function renderReport(){
@@ -696,7 +706,7 @@ function buildDetailSection(L){
   reg.forEach(m=>out.push(`　${m.姓名}　${fmt(m.手收)}`));
   if(dfr.length){
     if(reg.length)out.push(`　— 遞延到本月 —`);
-    dfr.forEach(m=>{const nm=String(m.姓名).replace(/^特別組遞延[·・]?/,'')||'遞延給付';out.push(`　遞延｜${nm}　${fmt(m.手收)}`);});
+    dfr.forEach(m=>{const nm=String(m.姓名).replace(/^(特別組遞延|遞延給付)[·・]?/,'')||'遞延給付';out.push(`　遞延｜${nm}　${fmt(m.手收)}`);});
   }
   const sum=rows.reduce((s,m)=>s+(Number(m.手收)||0),0);
   out.push(`　合計　${fmt(sum)}（＝${L.cLab} c）`);
