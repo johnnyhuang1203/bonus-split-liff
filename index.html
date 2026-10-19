@@ -214,7 +214,10 @@
   <div class="page" id="p-detail">
     <div class="card">
       <h2><span class="dot"></span>明細 <span class="chip" id="detail_count"></span></h2>
-      <div class="field"><label>篩選月份</label><select id="d_filter"></select></div>
+      <div class="grid2">
+        <div class="field"><label>篩選月份</label><select id="d_filter"></select></div>
+        <div class="field"><label>篩選理專（掛單人）</label><select id="d_who"></select></div>
+      </div>
       <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px">點右側 ✎ 可修改或刪除該筆手收。</div>
       <div class="sheet-wrap"><table class="sheet"><thead><tr><th>姓名</th><th>月份</th><th>手收</th><th>組別</th><th>掛單人</th><th>修改</th></tr></thead><tbody id="detail_body"></tbody></table></div>
       <div id="d_edit" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--plum);border-radius:12px;background:var(--plum-tint)">
@@ -429,12 +432,15 @@ function renderCustomers(){
   const trT=document.createElement('tr');trT.style.cssText='font-weight:700;background:rgba(124,144,112,.08)';trT.innerHTML=`<td>合計</td><td></td><td></td><td class="num">${fmt(totCust)}</td><td class="num">100%</td>`;tb.appendChild(trT);
   // customer dropdown for add-手收
   const selfOpts=Object.keys(DB.people).map(w=>({v:'__A_'+w+'__',t:w+'（累加到自己手收 a）'}));
-  fillSelect($('a_cust'),selfOpts.concat(DB.gz.map(c=>({v:c.姓名,t:c.姓名+'（'+c.組別+'）'}))));
+  const custOpts=[{v:'',t:'— 請選擇客戶 —'}].concat(selfOpts).concat(DB.gz.map(c=>({v:c.姓名,t:c.姓名+'（'+c.組別+'）'})));
+  const prevCust=$('a_cust').value;const keep=custOpts.some(o=>o.v===prevCust)?prevCust:'';
+  fillSelect($('a_cust'),custOpts,keep);
   onCustChange();
 }
 function selfWho(v){return (v&&v.indexOf('__A_')===0)?v.slice(4,-2):null;}
 function onCustChange(){
   const val=$('a_cust').value;const sw=selfWho(val);const el=$('a_attr');
+  if(!val){el.textContent='';el.style.cssText='font-size:12.5px;margin:-2px 0 10px;color:var(--ink-soft)';return;}
   if(sw){el.textContent='➕ 累加到 '+sw+' 的「自己手收 a」（直接加進當月 a 欄位，不記入客戶明細）';el.style.cssText='font-size:13px;margin:-2px 0 10px;font-weight:700;color:var(--plum);background:var(--plum-tint);border:1px solid var(--plum);border-radius:8px;padding:7px 10px';return;}
   const c=DB.gz.find(x=>x.姓名===val);
   el.style.cssText='font-size:12.5px;margin:-2px 0 10px;color:var(--ink-soft)';
@@ -442,10 +448,24 @@ function onCustChange(){
 }
 function renderDetail(){
   $('detail_count').textContent=DB.md.length+' 筆';
-  const months=['（全部）',...allMonths()];fillSelect($('d_filter'),months,$('d_filter').value||'（全部）');
-  const f=$('d_filter').value;
+  const months=['（全部）',...allMonths().slice().reverse()];fillSelect($('d_filter'),months,$('d_filter').value||'（全部）');
+  const whos=['（全部）',...Object.keys(DB.people)];fillSelect($('d_who'),whos,$('d_who').value||'（全部）');
+  const f=$('d_filter').value,fw=$('d_who').value;
   const tb=$('detail_body');tb.innerHTML='';
-  DB.md.map((m,i)=>({m,i})).filter(o=>f==='（全部）'||!f||o.m.月份===f).reverse().forEach(({m,i})=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td>${m.組別}</td><td>${m.掛單人}</td><td><button type="button" class="d-edit-btn" data-i="${i}" style="padding:3px 10px;border:1px solid var(--line);background:var(--card);border-radius:7px;cursor:pointer;font-size:14px">✎</button></td>`;tb.appendChild(tr);});
+  const rows=DB.md.map((m,i)=>({m,i})).filter(o=>(f==='（全部）'||!f||String(o.m.月份)===f)&&(fw==='（全部）'||!fw||o.m.掛單人===fw));
+  if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="color:var(--ink-soft)">沒有符合的明細</td></tr>';return;}
+  // 分類：月份（新→舊）→ 理專
+  const monthsDesc=[...new Set(rows.map(o=>String(o.m.月份)))].sort().reverse();
+  const whoOrder=Object.keys(DB.people);
+  monthsDesc.forEach(mo=>{
+    const inMonth=rows.filter(o=>String(o.m.月份)===mo);
+    const whosHere=[...new Set(inMonth.map(o=>o.m.掛單人))].sort((a,b)=>whoOrder.indexOf(a)-whoOrder.indexOf(b));
+    whosHere.forEach(w=>{
+      const grp=inMonth.filter(o=>o.m.掛單人===w);const sum=grp.reduce((s,o)=>s+(Number(o.m.手收)||0),0);
+      const th=document.createElement('tr');th.innerHTML=`<td colspan="6" style="background:var(--sage-tint);color:var(--sage-deep);font-weight:700;padding:8px 10px">📅 ${mo}　👤 ${w}　<span style="font-weight:400;color:var(--ink-soft)">${grp.length} 筆・合計 ${fmt(sum)}</span></td>`;tb.appendChild(th);
+      grp.slice().reverse().forEach(({m,i})=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${m.姓名}</td><td>${m.月份}</td><td class="num">${fmt(m.手收)}</td><td>${m.組別}</td><td>${m.掛單人}</td><td><button type="button" class="d-edit-btn" data-i="${i}" style="padding:3px 10px;border:1px solid var(--line);background:var(--card);border-radius:7px;cursor:pointer;font-size:14px">✎</button></td>`;tb.appendChild(tr);});
+    });
+  });
   tb.querySelectorAll('.d-edit-btn').forEach(b=>b.onclick=()=>editDetail(+b.dataset.i));
 }
 let editIdx=-1,editExp=null,delArm=false;
@@ -600,12 +620,13 @@ function renderAll(){
 async function doAddDetail(){
   const val=$('a_cust').value,month=$('a_month').value.trim(),fee=parseFloat($('a_fee').value)||0;
   const m=$('a_msg');m.style.display='block';
+  if(!val){m.className='msg err';m.textContent='請先在上方選擇客戶（或「自己手收 a」）';return;}
   if(!month||!fee){m.className='msg err';m.textContent='請填月份與手收金額';return;}
   const sw=selfWho(val);
   if(sw){
     m.className='msg';m.textContent='累加中…';
     const res=await writeBlob(d=>{d.mp=d.mp||[];let e=d.mp.find(p=>p.w===sw&&String(p.m)===String(month));if(e){e.a=(Number(e.a)||0)+fee;}else{d.mp.push({w:sw,m:String(month),a:fee,disc:(sw==='夙君'?0.1:0),def:0});}});
-    if(res.ok){const cur=monthParam(sw,month).手收a;m.className='msg ok';m.textContent='✅ 已累加到 '+sw+' 自己手收 a：'+month+' ＋'+fmt(fee)+'（目前 a＝'+fmt(cur)+'）';$('a_fee').value='';renderAll();}
+    if(res.ok){const cur=monthParam(sw,month).手收a;m.className='msg ok';m.textContent='✅ 已累加到 '+sw+' 自己手收 a：'+month+' ＋'+fmt(fee)+'（目前 a＝'+fmt(cur)+'）';$('a_fee').value='';renderAll();$('a_cust').value='';onCustChange();}
     else{m.className='msg err';m.textContent='✗ 累加失敗：'+res.error;}
     return;
   }
@@ -613,7 +634,7 @@ async function doAddDetail(){
   if(!cust){m.className='msg err';m.textContent='找不到此客戶，請先到「客戶」新增';return;}
   m.className='msg';m.textContent='寫入中…';
   const res=await writeBlob(d=>{d.md=d.md||[];d.md.push({n:val,m:month,f:fee,g:cust.組別,w:cust.掛單人});});
-  if(res.ok){m.className='msg ok';m.textContent='✅ 已寫入明細：'+val+' '+month+' '+fmt(fee)+'（進 '+cust.掛單人+' 的 '+(cust.組別.indexOf('特別組')>=0?'c':'b')+'）';$('a_fee').value='';renderAll();}
+  if(res.ok){m.className='msg ok';m.textContent='✅ 已寫入明細：'+val+' '+month+' '+fmt(fee)+'（進 '+cust.掛單人+' 的 '+(cust.組別.indexOf('特別組')>=0?'c':'b')+'）';$('a_fee').value='';renderAll();$('a_cust').value='';onCustChange();}
   else{m.className='msg err';m.textContent='✗ 寫入失敗：'+res.error;}
 }
 async function doAddCustomer(){
@@ -652,6 +673,7 @@ $('a_cust').addEventListener('change',onCustChange);
 $('a_submit').addEventListener('click',doAddDetail);
 $('nc_submit').addEventListener('click',doAddCustomer);
 $('d_filter').addEventListener('change',()=>{closeEdit();renderDetail();});
+$('d_who').addEventListener('change',()=>{closeEdit();renderDetail();});
 $('e_save').addEventListener('click',saveEdit);
 $('e_cancel').addEventListener('click',closeEdit);
 $('e_del').addEventListener('click',delDetail);
