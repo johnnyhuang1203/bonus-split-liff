@@ -133,7 +133,11 @@
       <div class="rline"><span class="k" id="k_net3">③ 經理淨留存</span><span class="v" id="o_net3"></span></div>
       <div class="msg" id="advice" style="display:block"></div>
     </div>
-    <button class="btn" id="sendBtn">傳送結果到聊天室</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn" id="sendBtnPlain" style="flex:1;font-size:14px">傳送（不含算式）</button>
+      <button class="btn ghost" id="sendBtnCalc" style="flex:1;font-size:14px">傳送（含算式）</button>
+    </div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;text-align:center;line-height:1.5">不含算式：給特別組／客戶看最終分配；含算式：給理專看完整推算。<br>在 LINE 內開啟會直接送到聊天室，否則複製到剪貼簿可自行貼上。</div>
   </div>
 
   <!-- 新增手收 -->
@@ -367,7 +371,7 @@ function renderCalc(){
   $('o_recb').textContent=fmt(r.rec[1]);$('o_recc').textContent=fmt(r.rec[2]);
   $('o_pay1').textContent=fmt(r.pay1);$('o_pay2').textContent=fmt(r.pay2);$('o_net3').textContent=fmt(r.net3);
   const adv=$('advice');adv.className='msg '+(r.warn?'err':'ok');adv.textContent=r.advice;
-  window.__last={who,month,a,b,c,r};
+  window.__last={who,month,a,b,c,r,bLab:p.b組別,cLab:p.c組別,disc,tax:DB.tax,modelLab:((MLAB.find(x=>x[0]===DB.model)||['',DB.model])[1])};
 }
 function onWhoMonthChange(){
   const who=$('c_who').value, month=$('c_month').value;const mp=monthParam(who,month);
@@ -633,12 +637,67 @@ $('sa_del').addEventListener('click',delSelfA);
 $('df_submit').addEventListener('click',doAddDefer);
 
 /* ====== 傳送訊息 ====== */
-function buildMessage(){const L=window.__last;if(!L)return'';const r=L.r;
-  return `📊 獎金分潤試算 · ${L.who} ${L.month}\n總手收：${fmt(r.total)}（落點 ${pct(r.rate)}）\n總獎金(稅後)：${fmt(r.afterTax)}\n${L.who}淨留存：${fmt(r.net3)}\n撥給${L.who}：${fmt(r.pay1)}／轉付外部：${fmt(r.pay2)}`;}
+function buildMessagePlain(){const L=window.__last;if(!L)return'';const r=L.r;
+  return [
+    `📊 獎金分潤試算`,
+    `${L.who}　${L.month}`,
+    `────────────`,
+    `總手收　${fmt(r.total)}（落點 ${pct(r.rate)}）`,
+    `稅後總獎金　${fmt(r.afterTax)}`,
+    ``,
+    `分配　採用模型：${L.modelLab}`,
+    `・${L.who}自己　${fmt(r.rec[0])}`,
+    `・${L.bLab}　${fmt(r.rec[1])}`,
+    `・${L.cLab}　${fmt(r.rec[2])}`,
+    ``,
+    `① 撥給${L.who}（含代轉${L.cLab}）　${fmt(r.pay1)}`,
+    `② ${L.who}轉付${L.cLab}　${fmt(r.pay2)}`,
+    `③ ${L.who}淨留存　${fmt(r.net3)}`
+  ].join('\n');}
+function buildMessageCalc(){const L=window.__last;if(!L)return'';const r=L.r;
+  const deferred=Math.max(0,r.duty-r.d);
+  const dutyLine=deferred>0?`責任額　${fmt(r.d)} ＋ 遞延 ${fmt(deferred)} ＝ ${fmt(r.duty)}`:`責任額　${fmt(r.duty)}`;
+  const taxExpr=`淨業績 × ${pct(r.rate)}`+(L.disc>0?` × (1−折扣${pct(L.disc)})`:'')+` × (1−稅${pct(L.tax)})`;
+  return [
+    `📊 獎金分潤試算（含算式）`,
+    `${L.who}　${L.month}`,
+    `────────────`,
+    `〔手收〕`,
+    `　${L.who}自己　${fmt(L.a)}`,
+    `　${L.bLab}　${fmt(L.b)}`,
+    `　${L.cLab}　${fmt(L.c)}`,
+    `　總手收　${fmt(r.total)}`,
+    ``,
+    `〔計算〕`,
+    `　${dutyLine}`,
+    `　淨業績 ＝ 總手收 − 責任額`,
+    `　　＝ ${fmt(r.total)} − ${fmt(r.duty)} ＝ ${fmt(r.e)}`,
+    `　落點比例　${pct(r.rate)}（依淨業績級距）`,
+    `　稅後總獎金 ＝ ${taxExpr}`,
+    `　　＝ ${fmt(r.afterTax)}`,
+    ``,
+    `〔分配：${L.modelLab}〕`,
+    `　${L.who}自己　${fmt(r.rec[0])}`,
+    `　${L.bLab}　${fmt(r.rec[1])}`,
+    `　${L.cLab}　${fmt(r.rec[2])}`,
+    ``,
+    `〔撥付〕`,
+    `　① 撥給${L.who}（含代轉${L.cLab}）　${fmt(r.pay1)}`,
+    `　② ${L.who}轉付${L.cLab}　${fmt(r.pay2)}`,
+    `　③ ${L.who}淨留存　${fmt(r.net3)}`
+  ].join('\n');}
 let inClient=false;
-$('sendBtn').addEventListener('click',async()=>{const msg=buildMessage();
-  if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){try{await liff.sendMessages([{type:'text',text:msg}]);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}catch(e){$('status').textContent='⚠️ '+e.message;}}
-  else{try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿';}catch(e){alert(msg);}}});
+async function sendResult(msg){
+  if(!msg){$('status').textContent='請先在「試算」選擇掛單人與月份';return;}
+  if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){
+    try{await liff.sendMessages([{type:'text',text:msg}]);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}
+    catch(e){$('status').textContent='⚠️ '+e.message;}
+  }else{
+    try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿（可貼到聊天室）';}catch(e){alert(msg);}
+  }
+}
+$('sendBtnPlain').addEventListener('click',()=>sendResult(buildMessagePlain()));
+$('sendBtnCalc').addEventListener('click',()=>sendResult(buildMessageCalc()));
 
 /* ====== 啟動 ====== */
 async function init(){
