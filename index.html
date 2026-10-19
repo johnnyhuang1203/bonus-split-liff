@@ -264,6 +264,20 @@
   <p class="foot" id="foot"></p>
 </div>
 
+<div id="msgModal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(62,58,50,.5);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card);border-radius:16px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow);overflow:hidden">
+    <div style="padding:13px 16px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+      <span>試算結果（長按或按下方複製）</span>
+      <button type="button" id="mm_close" style="border:none;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--ink-soft);padding:0 4px">✕</button>
+    </div>
+    <textarea id="mm_text" readonly style="flex:1;margin:0;border:none;outline:none;padding:14px 16px;font-family:inherit;font-size:13px;line-height:1.6;resize:none;background:var(--card);color:var(--ink);white-space:pre;overflow:auto;min-height:220px"></textarea>
+    <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px">
+      <button type="button" class="btn" id="mm_copy" style="flex:1">複製全部</button>
+      <button type="button" class="btn ghost" id="mm_done" style="flex:1">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ====== 設定 ====== */
 const BLOB_URL = "https://bonus-split-default-rtdb.firebaseio.com/db.json";
@@ -711,20 +725,40 @@ function buildMessageCompare(){const L=window.__last;if(!L)return'';const r=L.r;
   out.push('★＝月報目前採用；要送單一模型請用上方兩顆按鈕。');
   return out.join('\n');}
 let inClient=false;
+/* 結果視窗：任何環境都保證看得到、可複製 */
+function showMsgModal(msg){
+  const t=$('mm_text');if(t)t.value=msg;
+  const m=$('msgModal');if(m)m.style.display='flex';
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>{$('status').textContent='📋 已自動複製，也可在視窗內複製／分享';}).catch(()=>{});}}catch(e){}
+}
+function hideMsgModal(){const m=$('msgModal');if(m)m.style.display='none';}
+function mmCopy(){
+  const t=$('mm_text');if(!t)return;
+  t.focus();t.select();try{t.setSelectionRange(0,t.value.length);}catch(e){}
+  let ok=false;try{ok=document.execCommand('copy');}catch(e){}
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t.value).then(()=>{$('status').textContent='📋 已複製';$('mm_copy').textContent='✅ 已複製';setTimeout(()=>{$('mm_copy').textContent='複製全部';},1500);}).catch(()=>{});}}catch(e){}
+  if(ok){$('status').textContent='📋 已複製';$('mm_copy').textContent='✅ 已複製';setTimeout(()=>{$('mm_copy').textContent='複製全部';},1500);}
+}
 async function sendResult(msg){
   if(!msg){$('status').textContent='請先在「試算」選擇掛單人與月份';return;}
-  const copy=async()=>{try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿（可貼到聊天室）';}catch(e){try{window.prompt('複製下面內容貼到聊天室：',msg);}catch(_){alert(msg);}}};
-  if(typeof liff==='undefined'||!inClient){await copy();return;}
-  const payload=[{type:'text',text:msg}];
-  let canShare=false;try{canShare=!!(liff.isApiAvailable&&liff.isApiAvailable('shareTargetPicker'));}catch(e){}
-  try{
-    if(canShare){await liff.shareTargetPicker(payload);$('status').textContent='✅ 已開啟分享到聊天室';}
-    else{await liff.sendMessages(payload);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient&&liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}
-  }catch(e){$('status').textContent='⚠️ 傳送失敗，改用複製';await copy();}
+  if(typeof liff!=='undefined'&&inClient){
+    const payload=[{type:'text',text:msg}];
+    let canShare=false;try{canShare=!!(liff.isApiAvailable&&liff.isApiAvailable('shareTargetPicker'));}catch(e){}
+    try{
+      if(canShare){await liff.shareTargetPicker(payload);$('status').textContent='✅ 已開啟分享到聊天室';return;}
+      await liff.sendMessages(payload);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient&&liff.isInClient())setTimeout(()=>liff.closeWindow(),600);return;
+    }catch(e){$('status').textContent='ℹ️ 無法直接送出，已改用視窗顯示';showMsgModal(msg);return;}
+  }
+  $('status').textContent='ℹ️ 結果已顯示在視窗，可複製貼到聊天室';
+  showMsgModal(msg);
 }
 $('sendBtnPlain').addEventListener('click',()=>sendResult(buildMessagePlain(getSendModel())));
 $('sendBtnCalc').addEventListener('click',()=>sendResult(buildMessageCalc(getSendModel())));
 $('sendBtnCompare').addEventListener('click',()=>sendResult(buildMessageCompare()));
+$('mm_copy').addEventListener('click',mmCopy);
+$('mm_done').addEventListener('click',hideMsgModal);
+$('mm_close').addEventListener('click',hideMsgModal);
+$('msgModal').addEventListener('click',e=>{if(e.target===$('msgModal'))hideMsgModal();});
 
 /* ====== 啟動 ====== */
 async function init(){
