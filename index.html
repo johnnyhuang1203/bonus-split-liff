@@ -713,12 +713,14 @@ function buildMessageCompare(){const L=window.__last;if(!L)return'';const r=L.r;
 let inClient=false;
 async function sendResult(msg){
   if(!msg){$('status').textContent='請先在「試算」選擇掛單人與月份';return;}
-  if(typeof liff!=='undefined'&&liff.isApiAvailable&&liff.isApiAvailable('sendMessages')&&inClient){
-    try{await liff.sendMessages([{type:'text',text:msg}]);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}
-    catch(e){$('status').textContent='⚠️ '+e.message;}
-  }else{
-    try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿（可貼到聊天室）';}catch(e){alert(msg);}
-  }
+  const copy=async()=>{try{await navigator.clipboard.writeText(msg);$('status').textContent='📋 已複製到剪貼簿（可貼到聊天室）';}catch(e){try{window.prompt('複製下面內容貼到聊天室：',msg);}catch(_){alert(msg);}}};
+  if(typeof liff==='undefined'||!inClient){await copy();return;}
+  const payload=[{type:'text',text:msg}];
+  let canShare=false;try{canShare=!!(liff.isApiAvailable&&liff.isApiAvailable('shareTargetPicker'));}catch(e){}
+  try{
+    if(canShare){await liff.shareTargetPicker(payload);$('status').textContent='✅ 已開啟分享到聊天室';}
+    else{await liff.sendMessages(payload);$('status').textContent='✅ 已傳送到聊天室';if(liff.isInClient&&liff.isInClient())setTimeout(()=>liff.closeWindow(),600);}
+  }catch(e){$('status').textContent='⚠️ 傳送失敗，改用複製';await copy();}
 }
 $('sendBtnPlain').addEventListener('click',()=>sendResult(buildMessagePlain(getSendModel())));
 $('sendBtnCalc').addEventListener('click',()=>sendResult(buildMessageCalc(getSendModel())));
